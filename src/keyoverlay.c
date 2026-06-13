@@ -137,6 +137,15 @@ struct fb {
 	struct fb_var_screeninfo var;
 };
 
+static uint32_t pack_color(const struct fb *fb, struct rgb c)
+{
+	uint32_t r = c.r >> (8 - fb->var.red.length);
+	uint32_t g = c.g >> (8 - fb->var.green.length);
+	uint32_t b = c.b >> (8 - fb->var.blue.length);
+	return (r << fb->var.red.offset) | (g << fb->var.green.offset) |
+	       (b << fb->var.blue.offset);
+}
+
 static int fb_open(struct fb *fb, const char *path)
 {
 	struct fb_fix_screeninfo fix;
@@ -304,6 +313,46 @@ static void compute_panel(struct fb *fb, struct panel *p)
 		p->h = fb->yres;
 	p->x = ((int)fb->xres - p->w) / 2;
 	p->y = ((int)fb->yres - p->h) / 2;
+}
+
+static void draw_layout(struct fb *fb, const struct panel *p, const Layout *L)
+{
+	uint32_t panel = pack_color(fb, COL_PANEL);
+	uint32_t border = pack_color(fb, COL_BORDER);
+	uint32_t cell = pack_color(fb, COL_CELL);
+	uint32_t cell_empty = pack_color(fb, COL_CELL_EMPTY);
+	uint32_t text = pack_color(fb, COL_TEXT);
+	uint32_t title = pack_color(fb, COL_TITLE);
+
+	fill_rect(fb, p->x, p->y, p->w, p->h, panel);
+	draw_rect_outline(fb, p->x, p->y, p->w, p->h, border);
+	draw_rect_outline(fb, p->x + 1, p->y + 1, p->w - 2, p->h - 2, border);
+
+	int content_x = p->x + PANEL_PAD;
+	int y = p->y + PANEL_PAD;
+
+	draw_text(fb, content_x, y, L->title, title);
+	y += GLYPH_H + TITLE_GAP;
+
+	for (int ri = 0; ri < L->nrows; ri++) {
+		const Row *r = &L->rows[ri];
+		int x = content_x + (r->indent_half * MIN_CELL_W) / 2;
+		for (int ci = 0; ci < r->n; ci++) {
+			const char *label = r->label[ci];
+			int cw = cell_width(label);
+			bool empty = (label[0] == '\0');
+			fill_rect(fb, x, y, cw, CELL_H,
+				  empty ? cell_empty : cell);
+			if (!empty) {
+				int tw = (int)strlen(label) * GLYPH_W;
+				int tx = x + (cw - tw) / 2;
+				int ty = y + (CELL_H - GLYPH_H) / 2;
+				draw_text(fb, tx, ty, label, text);
+			}
+			x += cw + HGAP;
+		}
+		y += CELL_H + VGAP;
+	}
 }
 
 /* ------------------------------------------------------------------ */
