@@ -478,6 +478,11 @@ int main(int argc, char **argv)
 	struct panel panel;
 	compute_panel(&fb, &panel);
 
+	struct sigaction sa = {0};
+	sa.sa_handler = on_signal;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+
 	while (!g_stop) {
 	}
 			draw_layout(&fb, &panel, &layouts[L_NORMAL]);
