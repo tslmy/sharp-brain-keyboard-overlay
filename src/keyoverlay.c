@@ -17,12 +17,15 @@
  * still reach the console/applications as usual.
  */
 
+#include <errno.h>
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
 
 #include "font8x16.h"
 
@@ -120,6 +123,32 @@ static const struct rgb COL_TEXT = {255, 255, 255};
 static const struct rgb COL_TITLE = {255, 255, 255};
 
 /* ------------------------------------------------------------------ */
+/* Framebuffer                                                        */
+/* ------------------------------------------------------------------ */
+
+struct fb {
+	int fd;
+	struct fb_var_screeninfo var;
+};
+
+static int fb_open(struct fb *fb, const char *path)
+{
+	memset(fb, 0, sizeof(*fb));
+	fb->fd = open(path, O_RDWR);
+	if (fb->fd < 0) {
+		fprintf(stderr, "keyoverlay: open %s: %s\n", path, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+static void fb_close(struct fb *fb)
+{
+	if (fb->fd >= 0)
+		close(fb->fd);
+}
+
+/* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -134,11 +163,18 @@ static void usage(const char *argv0)
 int main(int argc, char **argv)
 {
 	while ((opt = getopt(argc, argv, "h")) != -1) {
+	const char *fbpath = "/dev/fb0";
 		switch (opt) {
 		case 'h': usage(argv[0]); return 0;
 		default: usage(argv[0]); return 2;
 		}
 	}
 
+	struct fb fb;
+	if (fb_open(&fb, fbpath) < 0) {
+		close(ifd);
+		return 1;
+	}
+	fb_close(&fb);
 	return 0;
 }
