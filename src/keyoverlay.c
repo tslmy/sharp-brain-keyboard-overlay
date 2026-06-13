@@ -356,6 +356,36 @@ static void draw_layout(struct fb *fb, const struct panel *p, const Layout *L)
 }
 
 /* ------------------------------------------------------------------ */
+/* Input device                                                       */
+/* ------------------------------------------------------------------ */
+
+static int dev_name_matches(const char *path, const char *want)
+{
+	char name[256] = {0};
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return 0;
+	int ok = 0;
+	if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0)
+		ok = (strstr(name, want) != NULL);
+	close(fd);
+	return ok;
+}
+
+static int find_input_device(const char *want, char *out, size_t outlen)
+{
+	for (int i = 0; i < 32; i++) {
+		char path[64];
+		snprintf(path, sizeof(path), "/dev/input/event%d", i);
+		if (dev_name_matches(path, want)) {
+			snprintf(out, outlen, "%s", path);
+			return 0;
+		}
+	}
+	return -1;
+}
+
+/* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -371,17 +401,40 @@ static void usage(const char *argv0)
 {
 	fprintf(stderr,
 		"Usage: %s [options]\n"
+		"  -d DEV    input device (default: auto-detect by name)\n"
+		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
 		"  -h        this help\n",
 		argv0);
 }
 
 int main(int argc, char **argv)
 {
-	while ((opt = getopt(argc, argv, "h")) != -1) {
+	const char *dev = NULL;
+	const char *match = "brain-kbd"; /* Name of the input device to search for as a substring. */
 	const char *fbpath = "/dev/fb0";
+	int symbol_code = KEY_F16;
+	int normal_code = 0; /* KEY_RESERVED = disabled */
+	int verbose = 0;
+	char devbuf[64];
+	int opt;
+
+	while ((opt = getopt(argc, argv, "d:m:h")) != -1) {
 		switch (opt) {
+		case 'd': dev = optarg; break;
+		case 'm': match = optarg; break;
 		case 'h': usage(argv[0]); return 0;
 		default: usage(argv[0]); return 2;
+		}
+	}
+
+	if (!dev) {
+		if (find_input_device(match, devbuf, sizeof(devbuf)) == 0) {
+			dev = devbuf;
+		} else {
+			fprintf(stderr,
+				"keyoverlay: no input device matching \"%s\" found; "
+				"use -d or -l\n", match);
+			return 1;
 		}
 	}
 
