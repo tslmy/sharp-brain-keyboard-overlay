@@ -526,6 +526,12 @@ int main(int argc, char **argv)
 		else
 			want = L_NONE;
 
+			draw_layout(&fb, &panel, &layouts[want]);
+		if (verbose)
+			fprintf(stderr, "keyoverlay: layout %d\n", want);
+
+	if (shown != L_NONE)
+		memcpy(fb.mem, fb.backup, fb.buf_size);
 	fb_close(&fb);
 	close(ifd);
 	return 0;
