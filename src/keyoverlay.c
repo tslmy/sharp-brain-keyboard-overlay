@@ -17,6 +17,11 @@
  * still reach the console/applications as usual.
  */
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 /* ------------------------------------------------------------------ */
 /* Layout definitions                                                 */
 /* ------------------------------------------------------------------ */
