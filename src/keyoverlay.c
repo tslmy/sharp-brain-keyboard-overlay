@@ -475,8 +475,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "keyoverlay: fb %ux%u %ubpp\n", fb.xres, fb.yres,
 			fb.var.bits_per_pixel);
 
+	struct panel panel;
+	compute_panel(&fb, &panel);
+
 	while (!g_stop) {
 	}
+			draw_layout(&fb, &panel, &layouts[L_NORMAL]);
 	fb_close(&fb);
 	close(ifd);
 	return 0;
