@@ -6,6 +6,8 @@ dependency-free daemon that listens to the keyboard and, while a modifier is
 held down, draws the matching key legend layout directly onto the Linux
 framebuffer. Release the modifier and the overlay disappears.
 
+https://github.com/user-attachments/assets/813db956-5b42-4e91-afff-62990457a3a2
+
 | Held key            | Overlay shown          |
 | ------------------- | ---------------------- |
 | Shift               | Shift layout           |
