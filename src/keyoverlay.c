@@ -219,6 +219,28 @@ static void draw_rect_outline(struct fb *fb, int x, int y, int w, int h,
 	}
 }
 
+static void draw_glyph(struct fb *fb, int x, int y, char ch, uint32_t fg)
+{
+	if ((unsigned char)ch < FONT_FIRST || (unsigned char)ch > FONT_LAST)
+		ch = '?';
+	const unsigned char *g = &font8x16[((unsigned char)ch - FONT_FIRST) * FONT_H];
+	for (int row = 0; row < FONT_H; row++) {
+		unsigned char bits = g[row];
+		for (int col = 0; col < FONT_W; col++) {
+			if (!(bits & (0x80 >> col)))
+				continue;
+			fill_rect(fb, x + col * SCALE, y + row * SCALE, SCALE,
+				  SCALE, fg);
+		}
+	}
+}
+
+static void draw_text(struct fb *fb, int x, int y, const char *s, uint32_t fg)
+{
+	for (; *s; s++, x += GLYPH_W)
+		draw_glyph(fb, x, y, *s, fg);
+}
+
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
