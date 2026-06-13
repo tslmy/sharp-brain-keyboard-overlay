@@ -133,6 +133,7 @@ struct fb {
 	size_t map_size;     /* bytes mmapped */
 	uint32_t xres, yres;
 	uint32_t line_length;
+	uint32_t bpp;        /* bytes per pixel (2 or 4) */
 	struct fb_var_screeninfo var;
 };
 
@@ -157,6 +158,14 @@ static int fb_open(struct fb *fb, const char *path)
 	fb->xres = fb->var.xres;
 	fb->yres = fb->var.yres;
 	fb->line_length = fix.line_length;
+	fb->bpp = fb->var.bits_per_pixel / 8;
+	if (fb->bpp != 2 && fb->bpp != 4) {
+		fprintf(stderr, "keyoverlay: unsupported bpp %u\n",
+			fb->var.bits_per_pixel);
+		close(fb->fd);
+		return -1;
+	}
+
 	fb->map_size = fix.smem_len ? fix.smem_len
 				    : (size_t)fb->line_length * fb->yres;
 	fb->mem = mmap(NULL, fb->map_size, PROT_READ | PROT_WRITE, MAP_SHARED,
