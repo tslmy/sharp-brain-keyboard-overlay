@@ -403,6 +403,7 @@ static void usage(const char *argv0)
 		"Usage: %s [options]\n"
 		"  -d DEV    input device (default: auto-detect by name)\n"
 		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
+		"  -f FB     framebuffer device (default: /dev/fb0)\n"
 		"  -h        this help\n",
 		argv0);
 }
@@ -418,10 +419,11 @@ int main(int argc, char **argv)
 	char devbuf[64];
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:m:h")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:f:h")) != -1) {
 		switch (opt) {
 		case 'd': dev = optarg; break;
 		case 'm': match = optarg; break;
+		case 'f': fbpath = optarg; break;
 		case 'h': usage(argv[0]); return 0;
 		default: usage(argv[0]); return 2;
 		}
