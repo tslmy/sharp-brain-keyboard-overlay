@@ -242,6 +242,71 @@ static void draw_text(struct fb *fb, int x, int y, const char *s, uint32_t fg)
 }
 
 /* ------------------------------------------------------------------ */
+/* Layout rendering                                                   */
+/* ------------------------------------------------------------------ */
+
+static int cell_width(const char *label)
+{
+	int len = (int)strlen(label);
+	int w = len * GLYPH_W + 2 * HPAD;
+	return w < MIN_CELL_W ? MIN_CELL_W : w;
+}
+
+static int row_width(const Row *r)
+{
+	int w = (r->indent_half * MIN_CELL_W) / 2;
+	for (int i = 0; i < r->n; i++) {
+		w += cell_width(r->label[i]);
+		if (i + 1 < r->n)
+			w += HGAP;
+	}
+	return w;
+}
+
+static void layout_size(const Layout *L, int *out_w, int *out_h)
+{
+	int maxw = 0;
+	for (int i = 0; i < L->nrows; i++) {
+		int w = row_width(&L->rows[i]);
+		if (w > maxw)
+			maxw = w;
+	}
+	*out_w = maxw;
+	*out_h = GLYPH_H + TITLE_GAP + L->nrows * CELL_H +
+		 (L->nrows - 1) * VGAP;
+}
+
+/*
+ * The panel is sized once to fit the largest layout so that every layout is
+ * drawn within a fixed rectangle. Each draw repaints the whole panel, which
+ * wipes any previous overlay content without needing a restore in between.
+ */
+struct panel {
+	int x, y, w, h;
+};
+
+static void compute_panel(struct fb *fb, struct panel *p)
+{
+	int maxw = 0, maxh = 0;
+	for (size_t i = 0; i < sizeof(layouts) / sizeof(layouts[0]); i++) {
+		int w, h;
+		layout_size(&layouts[i], &w, &h);
+		if (w > maxw)
+			maxw = w;
+		if (h > maxh)
+			maxh = h;
+	}
+	p->w = maxw + 2 * PANEL_PAD;
+	p->h = maxh + 2 * PANEL_PAD;
+	if (p->w > (int)fb->xres)
+		p->w = fb->xres;
+	if (p->h > (int)fb->yres)
+		p->h = fb->yres;
+	p->x = ((int)fb->xres - p->w) / 2;
+	p->y = ((int)fb->yres - p->h) / 2;
+}
+
+/* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
