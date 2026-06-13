@@ -129,6 +129,8 @@ static const struct rgb COL_TITLE = {255, 255, 255};
 
 struct fb {
 	int fd;
+	uint8_t *mem;
+	size_t map_size;     /* bytes mmapped */
 	uint32_t xres, yres;
 	uint32_t line_length;
 	struct fb_var_screeninfo var;
@@ -155,11 +157,23 @@ static int fb_open(struct fb *fb, const char *path)
 	fb->xres = fb->var.xres;
 	fb->yres = fb->var.yres;
 	fb->line_length = fix.line_length;
+	fb->map_size = fix.smem_len ? fix.smem_len
+				    : (size_t)fb->line_length * fb->yres;
+	fb->mem = mmap(NULL, fb->map_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+		       fb->fd, 0);
+	if (fb->mem == MAP_FAILED) {
+		fprintf(stderr, "keyoverlay: mmap: %s\n", strerror(errno));
+		close(fb->fd);
+		return -1;
+	}
+
 	return 0;
 }
 
 static void fb_close(struct fb *fb)
 {
+	if (fb->mem && fb->mem != MAP_FAILED)
+		munmap(fb->mem, fb->map_size);
 	if (fb->fd >= 0)
 		close(fb->fd);
 }
