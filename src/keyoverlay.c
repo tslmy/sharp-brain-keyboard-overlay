@@ -430,6 +430,8 @@ static void usage(const char *argv0)
 		"  -d DEV    input device (default: auto-detect by name)\n"
 		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
 		"  -f FB     framebuffer device (default: /dev/fb0)\n"
+		"  -s CODE   key code emitted while Symbol (記号) is held (default: 186 = KEY_F16)\n"
+		"  -n CODE   key code that triggers the Normal layout (default: 0 = disabled)\n"
 		"  -l        list input devices and exit\n"
 		"  -v        verbose\n"
 		"  -h        this help\n",
@@ -447,11 +449,13 @@ int main(int argc, char **argv)
 	char devbuf[64];
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:m:f:lvh")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:f:s:n:lvh")) != -1) {
 		switch (opt) {
 		case 'd': dev = optarg; break;
 		case 'm': match = optarg; break;
 		case 'f': fbpath = optarg; break;
+		case 's': symbol_code = atoi(optarg); break;
+		case 'n': normal_code = atoi(optarg); break;
 		case 'l': list_input_devices(); return 0;
 		case 'v': verbose = 1; break;
 		case 'h': usage(argv[0]); return 0;
