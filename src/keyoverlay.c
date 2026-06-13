@@ -438,6 +438,11 @@ int main(int argc, char **argv)
 		}
 	}
 
+	int ifd = open(dev, O_RDONLY);
+	if (ifd < 0) {
+		fprintf(stderr, "keyoverlay: open %s: %s\n", dev, strerror(errno));
+		return 1;
+	}
 	struct fb fb;
 	if (fb_open(&fb, fbpath) < 0) {
 		close(ifd);
@@ -446,5 +451,6 @@ int main(int argc, char **argv)
 	while (!g_stop) {
 	}
 	fb_close(&fb);
+	close(ifd);
 	return 0;
 }
