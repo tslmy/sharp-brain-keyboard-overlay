@@ -129,6 +129,8 @@ static const struct rgb COL_TITLE = {255, 255, 255};
 
 struct fb {
 	int fd;
+	uint32_t xres, yres;
+	uint32_t line_length;
 	struct fb_var_screeninfo var;
 };
 
@@ -149,6 +151,10 @@ static int fb_open(struct fb *fb, const char *path)
 		close(fb->fd);
 		return -1;
 	}
+    // Assumption: the resolution doesn't change.
+	fb->xres = fb->var.xres;
+	fb->yres = fb->var.yres;
+	fb->line_length = fix.line_length;
 	return 0;
 }
 
