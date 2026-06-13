@@ -496,10 +496,9 @@ int main(int argc, char **argv)
 	sigaction(SIGTERM, &sa, NULL);
 
 	bool shift = false, symbol = false, normal = false;
+	enum layout_id shown = L_NONE;
 
 	while (!g_stop) {
-	}
-			draw_layout(&fb, &panel, &layouts[L_NORMAL]);
 		struct input_event ev;
 		ssize_t n = read(ifd, &ev, sizeof(ev));
 		if (n < 0) {
@@ -538,6 +537,9 @@ int main(int argc, char **argv)
 		else
 			want = L_NONE;
 
+		if (want == shown)
+			continue;
+
 		if (want == L_NONE) {
 			/* restore the clean screen */
 			memcpy(fb.mem, fb.backup, fb.buf_size);
@@ -546,8 +548,10 @@ int main(int argc, char **argv)
 				memcpy(fb.backup, fb.mem, fb.buf_size);
 			draw_layout(&fb, &panel, &layouts[want]);
 		}
+		shown = want;
 		if (verbose)
 			fprintf(stderr, "keyoverlay: layout %d\n", want);
+	}
 
 	if (shown != L_NONE)
 		memcpy(fb.mem, fb.backup, fb.buf_size);
