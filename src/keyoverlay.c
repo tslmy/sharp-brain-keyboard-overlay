@@ -486,6 +486,22 @@ int main(int argc, char **argv)
 	while (!g_stop) {
 	}
 			draw_layout(&fb, &panel, &layouts[L_NORMAL]);
+		struct input_event ev;
+		ssize_t n = read(ifd, &ev, sizeof(ev));
+		if (n < 0) {
+			if (errno == EINTR)
+				break;
+			fprintf(stderr, "keyoverlay: read: %s\n",
+				strerror(errno));
+			break;
+		}
+		if (n != (ssize_t)sizeof(ev))
+			continue;
+		if (ev.type != EV_KEY)
+			continue;
+		if (ev.value == 2) /* autorepeat */
+			continue;
+
 	fb_close(&fb);
 	close(ifd);
 	return 0;
