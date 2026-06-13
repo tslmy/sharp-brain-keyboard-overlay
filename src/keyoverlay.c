@@ -199,6 +199,26 @@ static inline void put_pixel(struct fb *fb, int x, int y, uint32_t v)
 	}
 }
 
+static void fill_rect(struct fb *fb, int x, int y, int w, int h, uint32_t v)
+{
+	for (int yy = y; yy < y + h; yy++)
+		for (int xx = x; xx < x + w; xx++)
+			put_pixel(fb, xx, yy, v);
+}
+
+static void draw_rect_outline(struct fb *fb, int x, int y, int w, int h,
+			      uint32_t v)
+{
+	for (int xx = x; xx < x + w; xx++) {
+		put_pixel(fb, xx, y, v);
+		put_pixel(fb, xx, y + h - 1, v);
+	}
+	for (int yy = y; yy < y + h; yy++) {
+		put_pixel(fb, x, yy, v);
+		put_pixel(fb, x + w - 1, yy, v);
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
