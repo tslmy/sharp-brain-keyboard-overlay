@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <linux/fb.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 
 #include "font8x16.h"
@@ -133,10 +134,19 @@ struct fb {
 
 static int fb_open(struct fb *fb, const char *path)
 {
+	struct fb_fix_screeninfo fix;
+
 	memset(fb, 0, sizeof(*fb));
 	fb->fd = open(path, O_RDWR);
 	if (fb->fd < 0) {
 		fprintf(stderr, "keyoverlay: open %s: %s\n", path, strerror(errno));
+		return -1;
+	}
+	if (ioctl(fb->fd, FBIOGET_VSCREENINFO, &fb->var) < 0 ||
+	    ioctl(fb->fd, FBIOGET_FSCREENINFO, &fix) < 0) {
+		fprintf(stderr, "keyoverlay: FBIOGET_*SCREENINFO: %s\n",
+			strerror(errno));
+		close(fb->fd);
 		return -1;
 	}
 	return 0;
