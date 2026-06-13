@@ -359,6 +359,14 @@ static void draw_layout(struct fb *fb, const struct panel *p, const Layout *L)
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
+static volatile sig_atomic_t g_stop;
+
+static void on_signal(int sig)
+{
+	(void)sig;
+	g_stop = 1;
+}
+
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
@@ -381,6 +389,8 @@ int main(int argc, char **argv)
 	if (fb_open(&fb, fbpath) < 0) {
 		close(ifd);
 		return 1;
+	}
+	while (!g_stop) {
 	}
 	fb_close(&fb);
 	return 0;
