@@ -419,6 +419,7 @@ static void usage(const char *argv0)
 		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
 		"  -f FB     framebuffer device (default: /dev/fb0)\n"
 		"  -l        list input devices and exit\n"
+		"  -v        verbose\n"
 		"  -h        this help\n",
 		argv0);
 }
@@ -434,12 +435,13 @@ int main(int argc, char **argv)
 	char devbuf[64];
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:m:f:lh")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:f:lvh")) != -1) {
 		switch (opt) {
 		case 'd': dev = optarg; break;
 		case 'm': match = optarg; break;
 		case 'f': fbpath = optarg; break;
 		case 'l': list_input_devices(); return 0;
+		case 'v': verbose = 1; break;
 		case 'h': usage(argv[0]); return 0;
 		default: usage(argv[0]); return 2;
 		}
@@ -461,11 +463,18 @@ int main(int argc, char **argv)
 		fprintf(stderr, "keyoverlay: open %s: %s\n", dev, strerror(errno));
 		return 1;
 	}
+	if (verbose)
+		fprintf(stderr, "keyoverlay: listening on %s\n", dev);
+
 	struct fb fb;
 	if (fb_open(&fb, fbpath) < 0) {
 		close(ifd);
 		return 1;
 	}
+	if (verbose)
+		fprintf(stderr, "keyoverlay: fb %ux%u %ubpp\n", fb.xres, fb.yres,
+			fb.var.bits_per_pixel);
+
 	while (!g_stop) {
 	}
 	fb_close(&fb);
