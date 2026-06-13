@@ -187,6 +187,18 @@ static void fb_close(struct fb *fb)
 		close(fb->fd);
 }
 
+static inline void put_pixel(struct fb *fb, int x, int y, uint32_t v)
+{
+	if (x < 0 || y < 0 || (uint32_t)x >= fb->xres || (uint32_t)y >= fb->yres)
+		return;
+	uint8_t *p = fb->mem + (size_t)y * fb->line_length + (size_t)x * fb->bpp;
+	if (fb->bpp == 2) {
+		*(uint16_t *)p = (uint16_t)v;
+	} else {
+		*(uint32_t *)p = v;
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
