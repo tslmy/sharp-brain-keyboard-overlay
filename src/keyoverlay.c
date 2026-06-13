@@ -22,6 +22,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "font8x16.h"
+
 /* ------------------------------------------------------------------ */
 /* Layout definitions                                                 */
 /* ------------------------------------------------------------------ */
@@ -85,6 +88,22 @@ static const Layout layouts[] = {
 	[L_SYMBOL] = {"Symbol", symbol_rows, 5},
 	[L_SYMSHIFT] = {"Symbol + Shift", symshift_rows, 5},
 };
+
+/* ------------------------------------------------------------------ */
+/* Rendering geometry                                                 */
+/* ------------------------------------------------------------------ */
+
+#define SCALE 2                       /* font scale factor */
+#define GLYPH_W (FONT_W * SCALE)      /* 16 */
+#define GLYPH_H (FONT_H * SCALE)      /* 32 */
+#define HPAD 6                        /* horizontal padding inside a cell */
+#define VPAD 6                        /* vertical padding inside a cell */
+#define MIN_CELL_W (GLYPH_W + 2 * HPAD)
+#define CELL_H (GLYPH_H + 2 * VPAD)
+#define HGAP 6                        /* gap between cells */
+#define VGAP 6                        /* gap between rows */
+#define PANEL_PAD 16                  /* padding inside the panel */
+#define TITLE_GAP 10                  /* gap below the title */
 
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
