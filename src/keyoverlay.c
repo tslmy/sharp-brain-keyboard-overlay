@@ -514,6 +514,18 @@ int main(int argc, char **argv)
 		else
 			continue; /* not a trigger key */
 
+		enum layout_id want;
+		if (normal)
+			want = L_NORMAL;
+		else if (symbol && shift)
+			want = L_SYMSHIFT;
+		else if (symbol)
+			want = L_SYMBOL;
+		else if (shift)
+			want = L_SHIFT;
+		else
+			want = L_NONE;
+
 	fb_close(&fb);
 	close(ifd);
 	return 0;
