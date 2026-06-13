@@ -17,6 +17,75 @@
  * still reach the console/applications as usual.
  */
 
+/* ------------------------------------------------------------------ */
+/* Layout definitions                                                 */
+/* ------------------------------------------------------------------ */
+
+#define MAXCELLS 12
+
+typedef struct {
+	const char *label[MAXCELLS];
+	int n;
+	int indent_half; /* indent in half cell-widths, mirrors physical stagger */
+} Row;
+
+typedef struct {
+	const char *title;
+	const Row *rows;
+	int nrows;
+} Layout;
+
+/* Function/top row is identical across all layouts. */
+#define FUNC_ROW {{"Pwr", "Esc", "Tab", "PgU", "PgD", "Ins", "Del"}, 7, 0}
+/* Ctrl/Alt bottom row is identical across all layouts. */
+#define CTRL_ROW {{"Ctrl", "Alt"}, 2, 0}
+
+static const Row normal_rows[] = {
+	FUNC_ROW,
+	{{"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"}, 10, 0},
+	{{"a", "s", "d", "f", "g", "h", "j", "k", "l"}, 9, 1},
+	{{"Shift", "z", "x", "c", "v", "b", "n", "m", "-", "BS"}, 10, 0},
+	CTRL_ROW,
+};
+
+static const Row shift_rows[] = {
+	FUNC_ROW,
+	{{"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"}, 10, 0},
+	{{"A", "S", "D", "F", "G", "H", "J", "K", "L"}, 9, 1},
+	{{"Shift", "Z", "X", "C", "V", "B", "N", "M", "_", "BS"}, 10, 0},
+	CTRL_ROW,
+};
+
+static const Row symbol_rows[] = {
+	FUNC_ROW,
+	{{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}, 10, 0},
+	{{"", "", "`", "=", "\\", ";", "'", "[", "]"}, 9, 1},
+	{{"Shift", "", "", "", "", "", ",", ".", "/", "BS"}, 10, 0},
+	CTRL_ROW,
+};
+
+static const Row symshift_rows[] = {
+	FUNC_ROW,
+	{{"!", "@", "#", "$", "%", "^", "&", "*", "(", ")"}, 10, 0},
+	{{"", "", "~", "+", "|", ":", "\"", "{", "}"}, 9, 1},
+	{{"Shift", "", "", "", "", "", "<", ">", "?", "BS"}, 10, 0},
+	CTRL_ROW,
+};
+
+enum layout_id { L_NONE = -1, L_NORMAL, L_SHIFT, L_SYMBOL, L_SYMSHIFT };
+
+static const Layout layouts[] = {
+	[L_NORMAL] = {"Normal", normal_rows, 5},
+	[L_SHIFT] = {"Shift", shift_rows, 5},
+	[L_SYMBOL] = {"Symbol", symbol_rows, 5},
+	[L_SYMSHIFT] = {"Symbol + Shift", symshift_rows, 5},
+};
+
+/* ------------------------------------------------------------------ */
+/* Main                                                               */
+/* ------------------------------------------------------------------ */
+
+
 int main(int argc, char **argv)
 {
 	return 0;
