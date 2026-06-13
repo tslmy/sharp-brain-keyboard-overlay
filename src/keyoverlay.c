@@ -385,6 +385,20 @@ static int find_input_device(const char *want, char *out, size_t outlen)
 	return -1;
 }
 
+static void list_input_devices(void)
+{
+	for (int i = 0; i < 32; i++) {
+		char path[64], name[256] = {0};
+		snprintf(path, sizeof(path), "/dev/input/event%d", i);
+		int fd = open(path, O_RDONLY);
+		if (fd < 0)
+			continue;
+		if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0)
+			printf("%s: %s\n", path, name);
+		close(fd);
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
@@ -404,6 +418,7 @@ static void usage(const char *argv0)
 		"  -d DEV    input device (default: auto-detect by name)\n"
 		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
 		"  -f FB     framebuffer device (default: /dev/fb0)\n"
+		"  -l        list input devices and exit\n"
 		"  -h        this help\n",
 		argv0);
 }
@@ -419,11 +434,12 @@ int main(int argc, char **argv)
 	char devbuf[64];
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:m:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:f:lh")) != -1) {
 		switch (opt) {
 		case 'd': dev = optarg; break;
 		case 'm': match = optarg; break;
 		case 'f': fbpath = optarg; break;
+		case 'l': list_input_devices(); return 0;
 		case 'h': usage(argv[0]); return 0;
 		default: usage(argv[0]); return 2;
 		}
