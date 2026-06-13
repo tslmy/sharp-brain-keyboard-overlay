@@ -17,6 +17,7 @@
  * still reach the console/applications as usual.
  */
 
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -122,8 +123,22 @@ static const struct rgb COL_TITLE = {255, 255, 255};
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
+static void usage(const char *argv0)
+{
+	fprintf(stderr,
+		"Usage: %s [options]\n"
+		"  -h        this help\n",
+		argv0);
+}
 
 int main(int argc, char **argv)
 {
+	while ((opt = getopt(argc, argv, "h")) != -1) {
+		switch (opt) {
+		case 'h': usage(argv[0]); return 0;
+		default: usage(argv[0]); return 2;
+		}
+	}
+
 	return 0;
 }
