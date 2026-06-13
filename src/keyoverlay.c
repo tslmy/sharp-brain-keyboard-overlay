@@ -90,7 +90,7 @@ static const Layout layouts[] = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Rendering geometry                                                 */
+/* Rendering geometry & colors                                        */
 /* ------------------------------------------------------------------ */
 
 #define SCALE 2                       /* font scale factor */
@@ -104,6 +104,19 @@ static const Layout layouts[] = {
 #define VGAP 6                        /* gap between rows */
 #define PANEL_PAD 16                  /* padding inside the panel */
 #define TITLE_GAP 10                  /* gap below the title */
+
+/* 8-bit RGB triplets. */
+#define RGB(r, g, b) ((struct rgb){r, g, b})
+struct rgb {
+	uint8_t r, g, b;
+};
+
+static const struct rgb COL_PANEL = {20, 20, 24};
+static const struct rgb COL_BORDER = {210, 210, 210};
+static const struct rgb COL_CELL = {120, 120, 120};
+static const struct rgb COL_CELL_EMPTY = {70, 70, 74};
+static const struct rgb COL_TEXT = {255, 255, 255};
+static const struct rgb COL_TITLE = {255, 255, 255};
 
 /* ------------------------------------------------------------------ */
 /* Main                                                               */
