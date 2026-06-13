@@ -483,6 +483,8 @@ int main(int argc, char **argv)
 	sigaction(SIGINT, &sa, NULL);
 	sigaction(SIGTERM, &sa, NULL);
 
+	bool shift = false, symbol = false, normal = false;
+
 	while (!g_stop) {
 	}
 			draw_layout(&fb, &panel, &layouts[L_NORMAL]);
@@ -501,6 +503,16 @@ int main(int argc, char **argv)
 			continue;
 		if (ev.value == 2) /* autorepeat */
 			continue;
+
+		bool down = (ev.value == 1);
+		if (ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT)
+			shift = down;
+		else if (ev.code == symbol_code)
+			symbol = down;
+		else if (normal_code && ev.code == normal_code)
+			normal = down;
+		else
+			continue; /* not a trigger key */
 
 	fb_close(&fb);
 	close(ifd);
