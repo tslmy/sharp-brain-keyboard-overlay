@@ -1,0 +1,12 @@
+# Options for the keyoverlay daemon. Run `keyoverlay -h` for the full list.
+#
+# By default the daemon auto-detects the "brain-kbd" input device, uses
+# /dev/fb0, and treats KEY_F16 (186) as the Symbol (記号) modifier. KEY_F16 is
+# emitted by the kernel keyboard driver when the device tree sets
+# "symbol-event-code = <KEY_F16>".
+#
+# To also show the Normal layout when an otherwise-unused key is held, find its
+# key code (see the README "discovering unused keys" section) and pass it with
+# -n, e.g. ARGS="-n 187" for KEY_F17.
+
+ARGS=""

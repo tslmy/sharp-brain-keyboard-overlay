@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# SysV/BusyBox init script for the keyoverlay daemon.
+
+DAEMON="/usr/bin/keyoverlay"
+PIDFILE="/var/run/keyoverlay.pid"
+ARGS=""
+
+[ -r /etc/default/keyoverlay ] && . /etc/default/keyoverlay
+
+case "$1" in
+	start)
+		printf "Starting keyoverlay: "
+		start-stop-daemon -S -b -m -p "$PIDFILE" -x "$DAEMON" -- $ARGS \
+			&& echo "OK" || echo "FAIL"
+		;;
+	stop)
+		printf "Stopping keyoverlay: "
+		start-stop-daemon -K -q -p "$PIDFILE"
+		rm -f "$PIDFILE"
+		echo "OK"
+		;;
+	restart|reload)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
