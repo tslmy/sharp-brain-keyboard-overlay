@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MIT
+# Dockerfile.deb — cross-compiles keyoverlay for armhf and produces a .deb.
+#
+# Usage (via Makefile):
+#   make deb          # build image + run container, outputs dist/keyoverlay_armhf.deb
+#
+# The resulting package can be added to an apt repository and installed with:
+#   apt install keyoverlay
+#
+# Runtime deps on target: libc6 (no X11 needed; X11 backend is opt-in at build).
+ARG BUILDER_PLATFORM=linux/amd64
+FROM --platform=${BUILDER_PLATFORM} debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        binutils \
+        build-essential \
+        dpkg-dev \
+        gcc-arm-linux-gnueabihf \
+        libc6-dev-armhf-cross \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+# Cross-compile (framebuffer backend only; no X11 on bare Debian console).
+RUN make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
+
+# Assemble the .deb package tree under /pkg.
+RUN set -e; \
+    mkdir -p /pkg/DEBIAN \
+             /pkg/usr/bin \
+             /pkg/lib/systemd/system \
+             /pkg/etc/default; \
+    install -m 0755 keyoverlay              /pkg/usr/bin/keyoverlay; \
+    install -m 0644 init/keyoverlay.service /pkg/lib/systemd/system/keyoverlay.service; \
+    install -m 0644 init/keyoverlay.default /pkg/etc/default/keyoverlay; \
+    install -m 0644 debian/control          /pkg/DEBIAN/control; \
+    install -m 0644 debian/conffiles        /pkg/DEBIAN/conffiles; \
+    install -m 0755 debian/postinst         /pkg/DEBIAN/postinst
+
+RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_armhf.deb
+
+# Default command: copy the deb to the /out mount point.
+CMD ["cp", "/keyoverlay_armhf.deb", "/out/"]

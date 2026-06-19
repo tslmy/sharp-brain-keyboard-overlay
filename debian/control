@@ -1,0 +1,13 @@
+Package: keyoverlay
+Version: 0~git
+Architecture: armhf
+Maintainer: tslmy <tslmy@users.noreply.github.com>
+Depends: libc6
+Section: utils
+Priority: optional
+Description: On-screen keymap overlay for SHARP Brain devices
+ Listens to the keyboard and, while a modifier key is held, draws the
+ matching key legend layout on the display. Supports both framebuffer
+ (bare TUI console) and X11 backends.
+ .
+ https://github.com/tslmy/sharp-brain-keyboard-overlay

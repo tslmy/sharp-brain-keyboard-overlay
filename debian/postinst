@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Enable and start on fresh install or re-install.
+        if command -v systemctl > /dev/null 2>&1; then
+            systemctl enable keyoverlay || true
+        fi
+        ;;
+esac
+
+exit 0
