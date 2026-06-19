@@ -196,13 +196,7 @@ static int fb_open(struct fb *fb, const char *path)
 		return -1;
 	}
 
-	fb->backup = malloc(fb->buf_size);
-	if (!fb->backup) {
-		fprintf(stderr, "keyoverlay: out of memory for backup\n");
-		munmap(fb->mem, fb->map_size);
-		close(fb->fd);
-		return -1;
-	}
+	fb->backup = NULL;  /* allocated later after panel size is known */
 	return 0;
 }
 
@@ -245,6 +239,37 @@ static void draw_rect_outline(struct fb *fb, int x, int y, int w, int h,
 	for (int yy = y; yy < y + h; yy++) {
 		put_pixel(fb, x, yy, v);
 		put_pixel(fb, x + w - 1, yy, v);
+	}
+}
+
+/*
+ * Copy a rectangular region from framebuffer to a linear buffer.
+ * Handles the fact that framebuffer memory is laid out with line_length
+ * bytes per row, not necessarily w*bpp.
+ */
+static void fb_region_to_buf(struct fb *fb, int x, int y, int w, int h,
+			       uint8_t *buf)
+{
+	for (int yy = 0; yy < h; yy++) {
+		uint8_t *src = fb->mem + (size_t)(y + yy) * fb->line_length +
+			       (size_t)x * fb->bpp;
+		uint8_t *dst = buf + (size_t)yy * w * fb->bpp;
+		memcpy(dst, src, (size_t)w * fb->bpp);
+	}
+}
+
+/*
+ * Copy a rectangular region from a linear buffer to framebuffer.
+ * Inverse of fb_region_to_buf().
+ */
+static void buf_to_fb_region(struct fb *fb, int x, int y, int w, int h,
+			       const uint8_t *buf)
+{
+	for (int yy = 0; yy < h; yy++) {
+		uint8_t *dst = fb->mem + (size_t)(y + yy) * fb->line_length +
+			       (size_t)x * fb->bpp;
+		const uint8_t *src = buf + (size_t)yy * w * fb->bpp;
+		memcpy(dst, src, (size_t)w * fb->bpp);
 	}
 }
 
@@ -333,6 +358,16 @@ static void compute_panel(struct fb *fb, struct panel *p)
 		p->h = fb->yres;
 	p->x = ((int)fb->xres - p->w) / 2;
 	p->y = ((int)fb->yres - p->h) / 2;
+
+	/* Allocate region-sized backup buffer now that we know panel size */
+	if (!fb->backup) {
+		size_t region_size = (size_t)p->w * p->h * fb->bpp;
+		fb->backup = malloc(region_size);
+		if (!fb->backup) {
+			fprintf(stderr, "keyoverlay: out of memory for region backup\n");
+			exit(1);
+		}
+	}
 }
 
 static void draw_layout(struct fb *fb, const struct panel *p, const Layout *L)
@@ -553,11 +588,13 @@ int main(int argc, char **argv)
 			continue;
 
 		if (want == L_NONE) {
-			/* restore the clean screen */
-			memcpy(fb.mem, fb.backup, fb.buf_size);
+			/* restore the panel region from backup */
+			buf_to_fb_region(&fb, panel.x, panel.y, panel.w, panel.h,
+					       fb.backup);
 		} else {
-			if (shown == L_NONE) /* first overlay: snapshot screen */
-				memcpy(fb.backup, fb.mem, fb.buf_size);
+			if (shown == L_NONE) /* first overlay: backup panel region */
+				fb_region_to_buf(&fb, panel.x, panel.y, panel.w, panel.h,
+						       fb.backup);
 			draw_layout(&fb, &panel, &layouts[want]);
 		}
 		shown = want;
@@ -566,7 +603,8 @@ int main(int argc, char **argv)
 	}
 
 	if (shown != L_NONE)
-		memcpy(fb.mem, fb.backup, fb.buf_size);
+		buf_to_fb_region(&fb, panel.x, panel.y, panel.w, panel.h,
+				       fb.backup);
 	fb_close(&fb);
 	close(ifd);
 	return 0;
