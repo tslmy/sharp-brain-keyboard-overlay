@@ -1,0 +1,14 @@
+[Unit]
+Description=keyoverlay - on-screen keymap overlay for SHARP Brain devices
+Documentation=https://github.com/tslmy/sharp-brain-keyboard-overlay
+After=local-fs.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/keyoverlay
+ExecStart=/usr/bin/keyoverlay $ARGS
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
