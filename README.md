@@ -1,10 +1,10 @@
 # Sharp Brain Keyboard Overlay
 
 The Brain has a small, non-standard keyboard where most characters are typed
-with the **Shift** and **記号 (Symbol)** modifiers. `keyoverlay` is a tiny,
-dependency-free daemon that listens to the keyboard and, while a modifier is
-held down, draws the matching key legend layout directly onto the Linux
-framebuffer. Release the modifier and the overlay disappears.
+with the **Shift** and **記号 (Symbol)** modifiers. `keyoverlay` is a tiny
+daemon that listens to the keyboard and, while a modifier is held down, draws
+the matching key legend layout as an overlay. Release the modifier and the
+overlay disappears.
 
 https://github.com/user-attachments/assets/813db956-5b42-4e91-afff-62990457a3a2
 
@@ -24,23 +24,45 @@ runtime.
 - It opens an evdev device (`/dev/input/event*`) **passively** (it never grabs
   the device), so all keystrokes still reach the console and applications.
 - It tracks which trigger keys are currently held.
-- On a change it snapshots the framebuffer, paints the overlay panel, and
-  restores the snapshot when the last modifier is released.
-- The framebuffer pixel format (RGB565 / XRGB8888 / …) is detected at runtime
-  via `FBIOGET_VSCREENINFO`, so it works on both 16- and 32-bpp displays.
-
-This targets a **TUI / framebuffer console** environment (e.g. the Buildroot
-rootfs). It does not require X11.
+- On a change it asks the active **render backend** to show or hide the panel.
+- Two backends are supported and selected automatically at startup:
+  - **Framebuffer** (`/dev/fb0`) — for bare TUI / Buildroot console
+    environments. The panel region is saved and restored on hide. Pixel format
+    (RGB565 / XRGB8888 / …) is detected at runtime via `FBIOGET_VSCREENINFO`.
+  - **X11** — for desktop environments (jwm, etc.). Creates an
+    override-redirect window positioned at the same panel rectangle; no window
+    manager cooperation required. Selected automatically when `$DISPLAY` is
+    set; requires `WITH_X11=1` at compile time (the default).
 
 ## Building
 
+### Native build
+
 ```sh
-make                 # native build
-make CC=arm-linux-gcc # cross build
+make               # with X11 backend (requires libX11-dev on the host)
+make WITHOUT_X11=1 # framebuffer only, no X11 dependency
 ```
 
-The only requirements are a C compiler and the Linux UAPI headers
-(`linux/fb.h`, `linux/input.h`). No external libraries.
+The required headers are the Linux UAPI headers (`linux/fb.h`,
+`linux/input.h`) and, for the X11 backend, `<X11/Xlib.h>`.
+
+### Cross-build for armhf (Buildroot / Brainux)
+
+```sh
+make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1
+```
+
+### Debian package (armhf, via Docker)
+
+Produces `dist/keyoverlay_armhf.deb` for distribution via an apt repository:
+
+```sh
+make deb
+```
+
+Requires Docker with `linux/amd64` emulation (Docker Desktop on macOS is
+fine). The resulting package installs `/usr/bin/keyoverlay`, the systemd
+service unit, and `/etc/default/keyoverlay`.
 
 ## Usage
 
@@ -62,6 +84,14 @@ Example:
 keyoverlay -v             # auto-detect device, KEY_F16 as Symbol
 keyoverlay -n 187         # also show Normal layout when KEY_F17 is held
 ```
+
+## Running as a daemon
+
+A systemd service unit is provided at `init/keyoverlay.service`. Options are
+read from `/etc/default/keyoverlay` (see `init/keyoverlay.default`).
+
+For Buildroot-based systems (BusyBox init), use the SysV-style script at
+`init/S95keyoverlay`.
 
 ## Kernel requirement: detecting the Symbol key
 
