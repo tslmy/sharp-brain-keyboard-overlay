@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/linux,macos,windows,intellij,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=linux,macos,windows,intellij,visualstudiocode
+# Created by https://www.toptal.com/developers/gitignore/api/linux,macos,windows,intellij,visualstudiocode,zig
+# Edit at https://www.toptal.com/developers/gitignore?templates=linux,macos,windows,intellij,visualstudiocode,zig
 
 ### Intellij ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
@@ -207,5 +207,14 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,intellij,visualstudiocode
+### zig ###
+# Zig programming language
+
+.zig-cache/
+zig-out/
+build/
+build-*/
+docgen_tmp/
+
+# End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,intellij,visualstudiocode,zig
 dist/keyoverlay_armhf.deb

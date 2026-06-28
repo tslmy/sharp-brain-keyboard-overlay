@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Dockerfile.deb — cross-compiles keyoverlay for armhf and produces a .deb.
+# Dockerfile.deb — cross-compiles keyoverlay (Zig) for armhf and produces a .deb.
 #
 # Usage (via Makefile):
 #   make deb          # build image + run container, outputs dist/keyoverlay_armhf.deb
@@ -8,26 +8,45 @@
 #   apt install keyoverlay
 #
 # Runtime deps on target: libc6 (no X11 needed; X11 backend is opt-in at build).
-ARG BUILDER_PLATFORM=linux/amd64
-FROM --platform=${BUILDER_PLATFORM} debian:trixie
+#
+# Zig ships its own cross-compiler and bundled Linux headers, so the only build
+# dependencies are the Zig toolchain itself and dpkg-dev for packaging.  The
+# image builds on the host's native architecture (the produced .deb is armhf
+# regardless), which avoids slow/buggy emulation.
+FROM debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        binutils \
-        build-essential \
+        ca-certificates \
+        curl \
         dpkg-dev \
-        gcc-arm-linux-gnueabihf \
-        libc6-dev-armhf-cross \
-        make \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Install the Zig toolchain matching the build host's architecture; it
+# cross-compiles to armhf.
+ARG ZIG_VERSION=0.16.0
+ARG TARGETARCH
+RUN set -e; \
+    case "${TARGETARCH}" in \
+        amd64) ZA=x86_64 ;; \
+        arm64) ZA=aarch64 ;; \
+        *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-${ZA}-linux-${ZIG_VERSION}.tar.xz" \
+        -o /tmp/zig.tar.xz; \
+    mkdir -p /opt/zig; \
+    tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1; \
+    rm /tmp/zig.tar.xz
+ENV PATH=/opt/zig:${PATH}
 
 WORKDIR /src
 COPY . .
 
 # Cross-compile (framebuffer backend only; no X11 on bare Debian console).
-RUN make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
+RUN zig build -Dtarget=arm-linux-gnueabihf -Doptimize=ReleaseFast
 
 # Assemble the .deb package tree under /pkg.
 RUN set -e; \
@@ -35,7 +54,7 @@ RUN set -e; \
              /pkg/usr/bin \
              /pkg/lib/systemd/system \
              /pkg/etc/default; \
-    install -m 0755 keyoverlay              /pkg/usr/bin/keyoverlay; \
+    install -m 0755 zig-out/bin/keyoverlay  /pkg/usr/bin/keyoverlay; \
     install -m 0644 init/keyoverlay.service /pkg/lib/systemd/system/keyoverlay.service; \
     install -m 0644 init/keyoverlay.default /pkg/etc/default/keyoverlay; \
     install -m 0644 debian/control          /pkg/DEBIAN/control; \

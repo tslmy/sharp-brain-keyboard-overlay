@@ -1,32 +1,27 @@
 # SPDX-License-Identifier: MIT
-CC      ?= cc
-CFLAGS  ?= -O2 -Wall -Wextra
-PREFIX  ?= /usr
-BINDIR  ?= $(PREFIX)/bin
+#
+# Thin convenience wrapper around the Zig build system (see build.zig).
+# `zig build` is the source of truth; these targets just shorten common
+# invocations and drive the Docker-based armhf .deb packaging.
 
-BIN  := keyoverlay
-SRCS := src/keyoverlay.c src/render_fb.c
+ZIG       ?= zig
+OPTIMIZE  ?= ReleaseFast
 
-# X11 backend — opt out with:  make WITHOUT_X11=1
-WITHOUT_X11 ?= 0
-ifeq ($(WITHOUT_X11),0)
-  SRCS    += src/render_x11.c
-  CFLAGS  += -DWITH_X11
-  LDFLAGS += -lX11
+# Native/host build (framebuffer backend only by default).
+#   make X11=1   to also build the X11 backend (requires libX11).
+ifeq ($(X11),1)
+  X11FLAG := -Dx11=true
 endif
 
-HDRS := src/font8x16.h src/keyoverlay.h src/render_fb.h src/render_x11.h
+all:
+	$(ZIG) build -Doptimize=$(OPTIMIZE) $(X11FLAG)
 
-all: $(BIN)
-
-$(BIN): $(SRCS) $(HDRS)
-	$(CC) $(CFLAGS) -o $@ $(SRCS) $(LDFLAGS)
-
-install: $(BIN)
-	install -D -m 0755 $(BIN) $(DESTDIR)$(BINDIR)/$(BIN)
+# Cross-build for the Brain (armhf, framebuffer only).
+arm:
+	$(ZIG) build -Dtarget=arm-linux-gnueabihf -Doptimize=$(OPTIMIZE)
 
 clean:
-	rm -f $(BIN)
+	rm -rf .zig-cache zig-out
 
 # ------------ Debian package (armhf cross-build via Docker) ----------
 # Produces dist/keyoverlay_armhf.deb for distribution via an apt repository.
@@ -40,12 +35,12 @@ clean:
 DEB_IMAGE := keyoverlay-deb-builder:local
 
 deb-image:
-	docker build --platform linux/amd64 -t $(DEB_IMAGE) -f Dockerfile.deb .
+	docker build -t $(DEB_IMAGE) -f Dockerfile.deb .
 
 deb: deb-image
 	mkdir -p dist
-	docker run --rm --platform linux/amd64 \
+	docker run --rm \
 		-v "$$PWD/dist":/out \
 		$(DEB_IMAGE)
 
-.PHONY: all install clean deb-image deb
+.PHONY: all arm clean deb-image deb

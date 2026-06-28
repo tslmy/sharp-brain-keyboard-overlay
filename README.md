@@ -32,25 +32,31 @@ runtime.
   - **X11** — for desktop environments (jwm, etc.). Creates an
     override-redirect window positioned at the same panel rectangle; no window
     manager cooperation required. Selected automatically when `$DISPLAY` is
-    set; requires `WITH_X11=1` at compile time (the default).
+    set; requires `-Dx11=true` at compile time (off by default).
 
 ## Building
+
+The project is written in [Zig](https://ziglang.org) (0.16+). Zig bundles a
+cross-compiler and the Linux UAPI headers, so the framebuffer build needs no
+system headers or sysroot and cross-compiles from any host (including macOS).
 
 ### Native build
 
 ```sh
-make               # with X11 backend (requires libX11-dev on the host)
-make WITHOUT_X11=1 # framebuffer only, no X11 dependency
+zig build                 # framebuffer backend only
+zig build -Dx11=true      # also build the X11 backend (requires libX11)
 ```
 
-The required headers are the Linux UAPI headers (`linux/fb.h`,
-`linux/input.h`) and, for the X11 backend, `<X11/Xlib.h>`.
+The binary is written to `zig-out/bin/keyoverlay`. A `Makefile` wrapper is
+provided for convenience (`make`, `make X11=1`, `make arm`, `make clean`).
 
 ### Cross-build for armhf (Buildroot / Brainux)
 
 ```sh
-make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1
+zig build -Dtarget=arm-linux-gnueabihf -Doptimize=ReleaseFast
 ```
+
+No cross-toolchain installation is required — Zig ships the cross compiler.
 
 ### Debian package (armhf, via Docker)
 
@@ -60,9 +66,9 @@ Produces `dist/keyoverlay_armhf.deb` for distribution via an apt repository:
 make deb
 ```
 
-Requires Docker with `linux/amd64` emulation (Docker Desktop on macOS is
-fine). The resulting package installs `/usr/bin/keyoverlay`, the systemd
-service unit, and `/etc/default/keyoverlay`.
+Requires Docker (any host architecture). The container downloads the Zig
+toolchain, cross-compiles the framebuffer build, and assembles the package:
+`/usr/bin/keyoverlay`, the systemd service unit, and `/etc/default/keyoverlay`.
 
 ## Usage
 
@@ -133,5 +139,5 @@ matrix coordinates / key code of such a key on a GPIO-keyboard model:
 
 ## License
 
-MIT. The embedded font (`src/font8x16.h`) is the classic IBM VGA 8x16 font,
+MIT. The embedded font (`src/font8x16.zig`) is the classic IBM VGA 8x16 font,
 which is in the public domain.
