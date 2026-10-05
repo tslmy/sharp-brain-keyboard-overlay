@@ -44,8 +44,8 @@ test-x11:
 	$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -DWITH_X11 -o "$$test_bin" tests/render.c src/render.c -lX11; \
 	xvfb-run -a -s '-screen 0 800x480x24' "$$test_bin"
 
-# ------------ Debian package (armhf cross-build via Docker) ----------
-# Produces dist/keyoverlay_armhf.deb for distribution via an apt repository.
+# ------------ Debian package (armel cross-build via Docker) ----------
+# Produces dist/keyoverlay_armel.deb for distribution via an apt repository.
 # Requires Docker with linux/amd64 emulation (Docker Desktop on macOS is fine).
 #
 # Intended consumers:

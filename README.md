@@ -51,15 +51,15 @@ make WITHOUT_X11=1 # framebuffer only, no X11 dependency
 The required headers are the Linux UAPI headers (`linux/fb.h`,
 `linux/input.h`) and, for the X11 backend, `<X11/Xlib.h>`.
 
-### Cross-build for armhf (Buildroot / Brainux)
+### Cross-build for armel (Brainux / i.MX28)
 
 ```sh
-make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1
+make CC=arm-linux-gnueabi-gcc WITHOUT_X11=1
 ```
 
-### Debian package (armhf, via Docker)
+### Debian package (armel, via Docker)
 
-Produces `dist/keyoverlay_armhf.deb` for distribution via an apt repository:
+Produces `dist/keyoverlay_armel.deb` for distribution via an apt repository:
 
 ```sh
 make deb

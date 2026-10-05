@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Dockerfile.deb — cross-compiles keyoverlay for armhf and produces a .deb.
+# Dockerfile.deb — cross-compiles keyoverlay for armel and produces a .deb.
 #
 # Usage (via Makefile):
-#   make deb          # build image + run container, outputs dist/keyoverlay_armhf.deb
+#   make deb          # build image + run container, outputs dist/keyoverlay_armel.deb
 #
 # The resulting package can be added to an apt repository and installed with:
 #   apt install keyoverlay
@@ -18,8 +18,8 @@ RUN apt-get update \
         binutils \
         build-essential \
         dpkg-dev \
-        gcc-arm-linux-gnueabihf \
-        libc6-dev-armhf-cross \
+        gcc-arm-linux-gnueabi \
+        libc6-dev-armel-cross \
         make \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +27,7 @@ WORKDIR /src
 COPY . .
 
 # Cross-compile (framebuffer backend only; no X11 on bare Debian console).
-RUN make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
+RUN make CC=arm-linux-gnueabi-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
 
 # Assemble the .deb package tree under /pkg.
 RUN set -e; \
@@ -42,7 +42,7 @@ RUN set -e; \
     install -m 0644 debian/conffiles        /pkg/DEBIAN/conffiles; \
     install -m 0755 debian/postinst         /pkg/DEBIAN/postinst
 
-RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_armhf.deb
+RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_armel.deb
 
 # Default command: copy the deb to the /out mount point.
-CMD ["cp", "/keyoverlay_armhf.deb", "/out/"]
+CMD ["cp", "/keyoverlay_armel.deb", "/out/"]

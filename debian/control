@@ -1,6 +1,6 @@
 Package: keyoverlay
 Version: 0~git
-Architecture: armhf
+Architecture: armel
 Maintainer: tslmy <tslmy@users.noreply.github.com>
 Depends: libc6
 Section: utils
