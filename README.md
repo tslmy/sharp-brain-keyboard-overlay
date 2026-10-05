@@ -23,7 +23,10 @@ runtime.
 
 - It opens an evdev device (`/dev/input/event*`) **passively** (it never grabs
   the device), so all keystrokes still reach the console and applications.
-- It tracks which trigger keys are currently held.
+- It reads Symbol's held state from the keyboard's `symbol_activated` sysfs
+  attribute and waits for `sysfs_notify()` using `poll(POLLPRI)`. Shift and the
+  optional Normal trigger remain passive evdev observers; Symbol emits no
+  extra key events. The initial Symbol state is read at startup.
 - On a change it asks the active **render backend** to show or hide the panel.
 - Two backends are supported and selected automatically at startup:
   - **Framebuffer** (`/dev/fb0`) — for bare TUI / Buildroot console
@@ -71,7 +74,7 @@ keyoverlay [options]
   -d DEV    input device (default: auto-detect by name)
   -m NAME   device name substring for auto-detect (default: brain-kbd)
   -f FB     framebuffer device (default: /dev/fb0)
-  -s CODE   key code emitted while Symbol (記号) is held (default: 186 = KEY_F16)
+  -s PATH   Symbol state sysfs file (default: selected input device's symbol_activated)
   -n CODE   key code that triggers the Normal layout (default: 0 = disabled)
   -l        list input devices and exit
   -v        verbose
@@ -81,7 +84,7 @@ keyoverlay [options]
 Example:
 
 ```sh
-keyoverlay -v             # auto-detect device, KEY_F16 as Symbol
+keyoverlay -v             # auto-detect keyboard and its Symbol state attribute
 keyoverlay -n 187         # also show Normal layout when KEY_F17 is held
 ```
 
@@ -99,19 +102,20 @@ On the Brain, the **記号 (Symbol)** key is consumed inside the kernel keyboard
 driver to select the symbol keymap; by default it emits no input event, so
 userland cannot tell when it is held.
 
-The companion kernel change adds a device-tree property that makes the driver
-emit a dedicated, otherwise-inert key event on Symbol press/release:
+The companion kernel change (`linux-brain` revision `c1f25079d185`) exposes
+`/sys/class/input/input*/symbol_activated` on GPIO keyboards with `symbol-key`.
+The value is `1` while Symbol is held and `0` when released, not a toggled mode.
+The driver calls `sysfs_notify()` on both transitions without changing its
+normal symbol keymap behavior. This notification uses `poll(POLLPRI)`, not
+inotify file modification events.
 
-```dts
-&keyboard_gpio {
-    symbol-key = <4 3>;
-    symbol-event-code = <KEY_F16>;   /* emitted on Symbol press/release */
-};
-```
+The attribute is discovered from the selected evdev device, including when
+`-d` is used. `-s PATH` can override it. An absent or unreadable attribute is
+reported as an error; the old F16 mapping is no longer supported. Remove any
+existing `-s 186` setting from `/etc/default/keyoverlay`. **Shift** is already
+a real modifier (`KEY_LEFTSHIFT`) and needs no kernel change.
 
-`keyoverlay -s 186` (the default) then watches `KEY_F16`. `KEY_F16` is inert on
-the console, so it does not interfere with normal symbol input. **Shift** is
-already a real modifier (`KEY_LEFTSHIFT`) and needs no kernel change.
+Run the input-loop regression checks on Linux with `make test WITHOUT_X11=1`.
 
 ## Discovering unused keys (for the Normal-layout trigger)
 

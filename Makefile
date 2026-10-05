@@ -28,6 +28,11 @@ install: $(BIN)
 clean:
 	rm -f $(BIN)
 
+test:
+	$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -o /tmp/keyoverlay-test tests/input.c
+	/tmp/keyoverlay-test
+	rm -f /tmp/keyoverlay-test
+
 # ------------ Debian package (armhf cross-build via Docker) ----------
 # Produces dist/keyoverlay_armhf.deb for distribution via an apt repository.
 # Requires Docker with linux/amd64 emulation (Docker Desktop on macOS is fine).
@@ -48,4 +53,4 @@ deb: deb-image
 		-v "$$PWD/dist":/out \
 		$(DEB_IMAGE)
 
-.PHONY: all install clean deb-image deb
+.PHONY: all install clean test deb-image deb

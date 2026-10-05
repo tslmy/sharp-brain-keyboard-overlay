@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -33,6 +34,7 @@
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 
 #include "keyoverlay.h"
 #include "render_fb.h"
@@ -140,6 +142,20 @@ static void list_input_devices(void)
 
 static volatile sig_atomic_t g_stop;
 
+static int read_symbol_state(int fd, bool *symbol)
+{
+	char state[3];
+	ssize_t count = pread(fd, state, sizeof(state), 0);
+	if (count < 0)
+		return -1;
+	if (count != 2 || (state[0] != '0' && state[0] != '1') || state[1] != '\n') {
+		errno = EINVAL;
+		return -1;
+	}
+	*symbol = state[0] == '1';
+	return 0;
+}
+
 static void on_signal(int sig)
 {
 	(void)sig;
@@ -153,7 +169,7 @@ static void usage(const char *argv0)
 		"  -d DEV    input device (default: auto-detect by name)\n"
 		"  -m NAME   input device name substring for auto-detect (default: brain-kbd)\n"
 		"  -f FB     framebuffer device (default: /dev/fb0)\n"
-		"  -s CODE   key code emitted while Symbol (記号) is held (default: 186 = KEY_F16)\n"
+		"  -s PATH   Symbol state sysfs file (default: selected input device's symbol_activated)\n"
 		"  -n CODE   key code that triggers the Normal layout (default: 0 = disabled)\n"
 		"  -l        list input devices and exit\n"
 		"  -v        verbose\n"
@@ -166,10 +182,11 @@ int main(int argc, char **argv)
 	const char *dev         = NULL;
 	const char *match       = "brain-kbd";
 	const char *fbpath      = "/dev/fb0";
-	int         symbol_code = KEY_F16;
+	const char *symbol_path = NULL;
 	int         normal_code = 0;        /* KEY_RESERVED = disabled */
 	int         verbose     = 0;
 	char        devbuf[64];
+	char        symbol_buf[4096];
 	int         opt;
 
 	while ((opt = getopt(argc, argv, "d:m:f:s:n:lvh")) != -1) {
@@ -177,7 +194,7 @@ int main(int argc, char **argv)
 		case 'd': dev         = optarg;       break;
 		case 'm': match       = optarg;       break;
 		case 'f': fbpath      = optarg;       break;
-		case 's': symbol_code = atoi(optarg); break;
+		case 's': symbol_path = optarg;       break;
 		case 'n': normal_code = atoi(optarg); break;
 		case 'l': list_input_devices(); return 0;
 		case 'v': verbose     = 1;            break;
@@ -205,6 +222,41 @@ int main(int argc, char **argv)
 	if (verbose)
 		fprintf(stderr, "keyoverlay: listening on %s\n", dev);
 
+	if (!symbol_path) {
+		struct stat input_stat;
+		char input_sysfs[128], input_real[4096];
+		if (fstat(ifd, &input_stat) < 0) {
+			perror("keyoverlay: stat input device");
+			close(ifd);
+			return 1;
+		}
+		snprintf(input_sysfs, sizeof(input_sysfs), "/sys/dev/char/%u:%u/device",
+			 major(input_stat.st_rdev), minor(input_stat.st_rdev));
+		if (!realpath(input_sysfs, input_real)) {
+			perror("keyoverlay: resolve input sysfs device");
+			close(ifd);
+			return 1;
+		}
+		if (snprintf(symbol_buf, sizeof(symbol_buf), "%s/symbol_activated",
+			     input_real) >= (int)sizeof(symbol_buf)) {
+			fprintf(stderr, "keyoverlay: Symbol sysfs path too long\n");
+			close(ifd);
+			return 1;
+		}
+		symbol_path = symbol_buf;
+	}
+	int sfd = open(symbol_path, O_RDONLY);
+	bool shift = false, symbol = false, normal = false;
+	if (sfd < 0 || read_symbol_state(sfd, &symbol) < 0) {
+		fprintf(stderr, "keyoverlay: read %s: %s\n", symbol_path, strerror(errno));
+		if (sfd >= 0)
+			close(sfd);
+		close(ifd);
+		return 1;
+	}
+	if (verbose)
+		fprintf(stderr, "keyoverlay: Symbol state from %s\n", symbol_path);
+
 	/* Select render backend: prefer X11 when DISPLAY is available. */
 	render_backend *backend = NULL;
 
@@ -225,6 +277,7 @@ int main(int argc, char **argv)
 		backend = render_fb_create(fbpath, verbose);
 
 	if (!backend) {
+		close(sfd);
 		close(ifd);
 		return 1;
 	}
@@ -234,35 +287,14 @@ int main(int argc, char **argv)
 	sigaction(SIGINT,  &sa, NULL);
 	sigaction(SIGTERM, &sa, NULL);
 
-	bool shift = false, symbol = false, normal = false;
 	enum layout_id shown = L_NONE;
+	struct pollfd inputs[] = {
+		{ .fd = ifd, .events = POLLIN },
+		{ .fd = sfd, .events = POLLPRI },
+	};
+	int result = 0;
 
 	while (!g_stop) {
-		struct input_event ev;
-		ssize_t n = read(ifd, &ev, sizeof(ev));
-		if (n < 0) {
-			if (errno == EINTR)
-				break;
-			fprintf(stderr, "keyoverlay: read: %s\n", strerror(errno));
-			break;
-		}
-		if (n != (ssize_t)sizeof(ev))
-			continue;
-		if (ev.type != EV_KEY)
-			continue;
-		if (ev.value == 2) /* autorepeat */
-			continue;
-
-		bool down = (ev.value == 1);
-		if (ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT)
-			shift = down;
-		else if (ev.code == (unsigned)symbol_code)
-			symbol = down;
-		else if (normal_code && ev.code == (unsigned)normal_code)
-			normal = down;
-		else
-			continue; /* not a trigger key */
-
 		enum layout_id want;
 		if (normal)
 			want = L_NORMAL;
@@ -275,23 +307,61 @@ int main(int argc, char **argv)
 		else
 			want = L_NONE;
 
-		if (want == shown)
-			continue;
+		if (want != shown) {
+			if (want == L_NONE)
+				backend->hide(backend);
+			else
+				backend->show(backend, &layouts[want]);
+			shown = want;
+			if (verbose)
+				fprintf(stderr, "keyoverlay: layout %d\n", want);
+		}
 
-		if (want == L_NONE)
-			backend->hide(backend);
-		else
-			backend->show(backend, &layouts[want]);
-
-		shown = want;
-		if (verbose)
-			fprintf(stderr, "keyoverlay: layout %d\n", want);
+		if (poll(inputs, 2, -1) < 0) {
+			if (errno == EINTR)
+				continue;
+			perror("keyoverlay: poll");
+			result = 1;
+			break;
+		}
+		if ((inputs[0].revents & (POLLERR | POLLHUP | POLLNVAL)) ||
+		    (inputs[1].revents & (POLLHUP | POLLNVAL))) {
+			fprintf(stderr, "keyoverlay: input device disconnected\n");
+			result = 1;
+			break;
+		}
+		if (inputs[1].revents & (POLLPRI | POLLERR)) {
+			if (read_symbol_state(sfd, &symbol) < 0) {
+				perror("keyoverlay: read Symbol state");
+				result = 1;
+				break;
+			}
+		}
+		if (inputs[0].revents & POLLIN) {
+			struct input_event ev;
+			ssize_t count = read(ifd, &ev, sizeof(ev));
+			if (count < 0 && errno == EINTR)
+				continue;
+			if (count != (ssize_t)sizeof(ev)) {
+				fprintf(stderr, "keyoverlay: failed to read input event\n");
+				result = 1;
+				break;
+			}
+			if (ev.type != EV_KEY || ev.value == 2)
+				continue;
+			bool down = ev.value == 1;
+			if (ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT)
+				shift = down;
+			else if (normal_code && ev.code == (unsigned)normal_code)
+				normal = down;
+		}
 	}
 
 	if (shown != L_NONE)
 		backend->hide(backend);
 
 	backend->close(backend);
+	close(sfd);
 	close(ifd);
-	return 0;
+	return result;
 }
