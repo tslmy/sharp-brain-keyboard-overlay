@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * keyoverlay.h - shared types, geometry helpers, and render backend interface.
+ * keyoverlay.h - shared layout data and rendering interfaces.
  *
  * All rendering backends (framebuffer, X11, …) implement the render_backend
  * vtable.  The core input loop in keyoverlay.c is backend-agnostic.
@@ -9,7 +9,6 @@
 #define KEYOVERLAY_H
 
 #include <stdint.h>
-#include <string.h>
 
 /* ------------------------------------------------------------------ */
 /* Layout types                                                        */
@@ -29,7 +28,8 @@ typedef struct {
 	int nrows;
 } Layout;
 
-/* Defined in keyoverlay.c, referenced by the shared geometry helpers below. */
+enum layout_id { L_NONE = -1, L_NORMAL, L_SHIFT, L_SYMBOL, L_SYMSHIFT };
+
 extern const Layout layouts[];
 extern const int    N_LAYOUTS;
 
@@ -38,90 +38,21 @@ extern const int    N_LAYOUTS;
 /* ------------------------------------------------------------------ */
 
 struct rgb { uint8_t r, g, b; };
-#define RGB(r, g, b) ((struct rgb){(r), (g), (b)})
-
-static const struct rgb COL_PANEL      = {20,  20,  24 };
-static const struct rgb COL_BORDER     = {210, 210, 210};
-static const struct rgb COL_CELL       = {120, 120, 120};
-static const struct rgb COL_CELL_EMPTY = {70,  70,  74 };
-static const struct rgb COL_TEXT       = {255, 255, 255};
-static const struct rgb COL_TITLE      = {255, 255, 255};
-
-/* ------------------------------------------------------------------ */
-/* Rendering geometry constants                                        */
-/* ------------------------------------------------------------------ */
-
-/* Font dimensions match font8x16.h (FONT_W=8, FONT_H=16). */
-#define FONT_SCALE   2
-#define GLYPH_W      (8  * FONT_SCALE)  /* 16 px */
-#define GLYPH_H      (16 * FONT_SCALE)  /* 32 px */
-#define HPAD         6
-#define VPAD         6
-#define MIN_CELL_W   (GLYPH_W + 2 * HPAD)
-#define CELL_H       (GLYPH_H + 2 * VPAD)
-#define HGAP         6
-#define VGAP         6
-#define PANEL_PAD    16
-#define TITLE_GAP    10
-
-/* ------------------------------------------------------------------ */
-/* Panel geometry helpers (used by both backends and main)            */
-/* ------------------------------------------------------------------ */
+enum render_color { COL_PANEL, COL_BORDER, COL_CELL, COL_CELL_EMPTY,
+		    COL_TEXT, COL_TITLE, COLOR_COUNT };
+extern const struct rgb render_colors[COLOR_COUNT];
 
 struct panel { int x, y, w, h; };
 
-static inline int cell_width(const char *label)
-{
-	int len = (int)strlen(label);
-	int w   = len * GLYPH_W + 2 * HPAD;
-	return w < MIN_CELL_W ? MIN_CELL_W : w;
-}
+struct render_canvas {
+	void *context;
+	void (*fill_rect)(void *context, int x, int y, int w, int h, unsigned long color);
+	const unsigned long *colors;
+};
 
-static inline int row_width(const Row *r)
-{
-	int w = (r->indent_half * MIN_CELL_W) / 2;
-	for (int i = 0; i < r->n; i++) {
-		w += cell_width(r->label[i]);
-		if (i + 1 < r->n)
-			w += HGAP;
-	}
-	return w;
-}
-
-static inline void layout_size(const Layout *L, int *out_w, int *out_h)
-{
-	int maxw = 0;
-	for (int i = 0; i < L->nrows; i++) {
-		int w = row_width(&L->rows[i]);
-		if (w > maxw)
-			maxw = w;
-	}
-	*out_w = maxw;
-	*out_h = GLYPH_H + TITLE_GAP + L->nrows * CELL_H + (L->nrows - 1) * VGAP;
-}
-
-/*
- * Compute the panel rectangle centered on a screen of the given dimensions,
- * sized to fit the largest layout across all entries in layouts[].
- */
-static inline struct panel compute_panel(int screen_w, int screen_h)
-{
-	struct panel p;
-	int maxw = 0, maxh = 0;
-	for (int i = 0; i < N_LAYOUTS; i++) {
-		int w, h;
-		layout_size(&layouts[i], &w, &h);
-		if (w > maxw) maxw = w;
-		if (h > maxh) maxh = h;
-	}
-	p.w = maxw + 2 * PANEL_PAD;
-	p.h = maxh + 2 * PANEL_PAD;
-	if (p.w > screen_w) p.w = screen_w;
-	if (p.h > screen_h) p.h = screen_h;
-	p.x = (screen_w - p.w) / 2;
-	p.y = (screen_h - p.h) / 2;
-	return p;
-}
+void render_layout(const struct render_canvas *canvas, const struct panel *panel,
+		   const Layout *layout);
+struct panel compute_panel(int screen_w, int screen_h);
 
 /* ------------------------------------------------------------------ */
 /* Render backend interface                                            */

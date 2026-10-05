@@ -28,7 +28,6 @@
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 
-#include "font8x16.h"
 #include "keyoverlay.h"
 #include "render_x11.h"
 
@@ -45,13 +44,8 @@ struct x11_backend {
 	struct panel    panel;
 	bool            shown;
 
-	/* Pre-allocated pixel values for each named color. */
-	unsigned long   px_panel;
-	unsigned long   px_border;
-	unsigned long   px_cell;
-	unsigned long   px_cell_empty;
-	unsigned long   px_text;
-	unsigned long   px_title;
+	unsigned long   colors[COLOR_COUNT];
+	unsigned long   foreground;
 };
 
 /* ------------------------------------------------------------------ */
@@ -77,92 +71,16 @@ static unsigned long alloc_color(Display *dpy, int screen, struct rgb c)
 /* Primitive drawing (onto the overlay window)                         */
 /* ------------------------------------------------------------------ */
 
-static void x11_fill_rect(struct x11_backend *b, int x, int y, int w, int h,
+static void x11_fill_rect(void *context, int x, int y, int w, int h,
 			   unsigned long px)
 {
-	XSetForeground(b->dpy, b->gc, px);
+	struct x11_backend *b = context;
+	if (px != b->foreground) {
+		XSetForeground(b->dpy, b->gc, px);
+		b->foreground = px;
+	}
 	XFillRectangle(b->dpy, b->win, b->gc, x, y,
 		       (unsigned)w, (unsigned)h);
-}
-
-static void x11_draw_glyph(struct x11_backend *b, int x, int y, char ch,
-			    unsigned long fg)
-{
-	if ((unsigned char)ch < FONT_FIRST || (unsigned char)ch > FONT_LAST)
-		ch = '?';
-	const unsigned char *g =
-		&font8x16[((unsigned char)ch - FONT_FIRST) * FONT_H];
-	XSetForeground(b->dpy, b->gc, fg);
-	for (int row = 0; row < FONT_H; row++) {
-		unsigned char bits = g[row];
-		for (int col = 0; col < FONT_W; col++) {
-			if (!(bits & (0x80 >> col)))
-				continue;
-			XFillRectangle(b->dpy, b->win, b->gc,
-				       x + col * FONT_SCALE,
-				       y + row * FONT_SCALE,
-				       FONT_SCALE, FONT_SCALE);
-		}
-	}
-}
-
-static void x11_draw_text(struct x11_backend *b, int x, int y, const char *s,
-			   unsigned long fg)
-{
-	for (; *s; s++, x += GLYPH_W)
-		x11_draw_glyph(b, x, y, *s, fg);
-}
-
-/* ------------------------------------------------------------------ */
-/* Layout rendering                                                    */
-/* ------------------------------------------------------------------ */
-
-static void draw_layout_x11(struct x11_backend *b, const Layout *L)
-{
-	/*
-	 * The window covers exactly the panel rectangle, so all coordinates
-	 * below are relative to the window's top-left corner (i.e. subtract
-	 * panel.x / panel.y from the absolute positions used by the fb backend).
-	 */
-	int pw = b->panel.w;
-	int ph = b->panel.h;
-
-	x11_fill_rect(b, 0, 0, pw, ph, b->px_panel);
-
-	/* Double border */
-	XSetForeground(b->dpy, b->gc, b->px_border);
-	XDrawRectangle(b->dpy, b->win, b->gc, 0, 0,
-		       (unsigned)(pw - 1), (unsigned)(ph - 1));
-	XDrawRectangle(b->dpy, b->win, b->gc, 1, 1,
-		       (unsigned)(pw - 3), (unsigned)(ph - 3));
-
-	int x0 = PANEL_PAD;
-	int y  = PANEL_PAD;
-
-	x11_draw_text(b, x0, y, L->title, b->px_title);
-	y += GLYPH_H + TITLE_GAP;
-
-	for (int ri = 0; ri < L->nrows; ri++) {
-		const Row *r = &L->rows[ri];
-		int x = x0 + (r->indent_half * MIN_CELL_W) / 2;
-		for (int ci = 0; ci < r->n; ci++) {
-			const char *label = r->label[ci];
-			int   cw    = cell_width(label);
-			bool  empty = (label[0] == '\0');
-			x11_fill_rect(b, x, y, cw, CELL_H,
-				      empty ? b->px_cell_empty : b->px_cell);
-			if (!empty) {
-				int tw = (int)strlen(label) * GLYPH_W;
-				int tx = x + (cw - tw) / 2;
-				int ty = y + (CELL_H - GLYPH_H) / 2;
-				x11_draw_text(b, tx, ty, label, b->px_text);
-			}
-			x += cw + HGAP;
-		}
-		y += CELL_H + VGAP;
-	}
-
-	XFlush(b->dpy);
 }
 
 /* ------------------------------------------------------------------ */
@@ -176,7 +94,10 @@ static void x11_show(render_backend *base, const Layout *L)
 		XMapRaised(b->dpy, b->win);
 		b->shown = true;
 	}
-	draw_layout_x11(b, L);
+	struct render_canvas canvas = {b, x11_fill_rect, b->colors};
+	struct panel panel = {0, 0, b->panel.w, b->panel.h};
+	render_layout(&canvas, &panel, L);
+	XFlush(b->dpy);
 }
 
 static void x11_hide(render_backend *base)
@@ -218,7 +139,7 @@ render_backend *render_x11_create(int verbose)
 	b->dpy = XOpenDisplay(NULL);
 	if (!b->dpy) {
 		fprintf(stderr, "keyoverlay: cannot open X display\n");
-		goto err_free;
+		goto error;
 	}
 	b->screen = DefaultScreen(b->dpy);
 
@@ -232,17 +153,13 @@ render_backend *render_x11_create(int verbose)
 	b->panel = compute_panel(screen_w, screen_h);
 
 	/* Pre-allocate colors. */
-	b->px_panel      = alloc_color(b->dpy, b->screen, COL_PANEL);
-	b->px_border     = alloc_color(b->dpy, b->screen, COL_BORDER);
-	b->px_cell       = alloc_color(b->dpy, b->screen, COL_CELL);
-	b->px_cell_empty = alloc_color(b->dpy, b->screen, COL_CELL_EMPTY);
-	b->px_text       = alloc_color(b->dpy, b->screen, COL_TEXT);
-	b->px_title      = alloc_color(b->dpy, b->screen, COL_TITLE);
+	for (int color = 0; color < COLOR_COUNT; color++)
+		b->colors[color] = alloc_color(b->dpy, b->screen, render_colors[color]);
 
 	/* Create an override-redirect window (bypasses the window manager). */
 	XSetWindowAttributes attr = {0};
 	attr.override_redirect = True;
-	attr.background_pixel  = b->px_panel;
+	attr.background_pixel  = b->colors[COL_PANEL];
 
 	b->win = XCreateWindow(
 		b->dpy,
@@ -268,18 +185,15 @@ render_backend *render_x11_create(int verbose)
 	b->gc = XCreateGC(b->dpy, b->win, 0, NULL);
 	if (!b->gc) {
 		fprintf(stderr, "keyoverlay: XCreateGC failed\n");
-		goto err_destroy_win;
+		goto error;
 	}
 
 	/* Window starts unmapped (invisible) until show() is called. */
 	XFlush(b->dpy);
 	return &b->base;
 
-err_destroy_win:
-	XDestroyWindow(b->dpy, b->win);
-	XCloseDisplay(b->dpy);
-err_free:
-	free(b);
+error:
+	x11_close(&b->base);
 	return NULL;
 }
 

@@ -28,6 +28,8 @@ runtime.
   optional Normal trigger remain passive evdev observers; Symbol emits no
   extra key events. The initial Symbol state is read at startup.
 - On a change it asks the active **render backend** to show or hide the panel.
+- Both backends share the palette, bitmap text, borders, and key layout
+  drawing; only rectangle painting and display lifecycle are backend-specific.
 - Two backends are supported and selected automatically at startup:
   - **Framebuffer** (`/dev/fb0`) — for bare TUI / Buildroot console
     environments. The panel region is saved and restored on hide. Pixel format
@@ -115,7 +117,14 @@ reported as an error; the old F16 mapping is no longer supported. Remove any
 existing `-s 186` setting from `/etc/default/keyoverlay`. **Shift** is already
 a real modifier (`KEY_LEFTSHIFT`) and needs no kernel change.
 
-Run the input-loop regression checks on Linux with `make test WITHOUT_X11=1`.
+Run the regression checks on Linux with `make test`. They cover modifier
+transitions, sysfs discovery and cleanup, pixel output in both framebuffer
+formats, clipping, and framebuffer restoration. Tests do not require X11 or
+access to a real input device or framebuffer.
+
+`make test-x11` additionally compares actual X11 pixels to the framebuffer
+output under a virtual display. It requires libX11 development headers, Xvfb,
+and xauth.
 
 ## Discovering unused keys (for the Normal-layout trigger)
 

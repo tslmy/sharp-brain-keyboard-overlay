@@ -19,7 +19,6 @@
  * still reach the console/applications as usual.
  */
 
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -41,80 +40,26 @@
 #include "render_x11.h"
 
 /* ------------------------------------------------------------------ */
-/* Layout definitions                                                 */
-/* ------------------------------------------------------------------ */
-
-/* Function/top row is identical across all layouts. */
-#define FUNC_ROW {{"Pwr", "Esc", "Tab", "PgU", "PgD", "Ins", "Del"}, 7, 0}
-/* Ctrl/Alt bottom row is identical across all layouts. */
-#define CTRL_ROW {{"Ctrl", "Alt"}, 2, 0}
-
-static const Row normal_rows[] = {
-	FUNC_ROW,
-	{{"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"}, 10, 0},
-	{{"a", "s", "d", "f", "g", "h", "j", "k", "l"}, 9, 1},
-	{{"Shift", "z", "x", "c", "v", "b", "n", "m", "-", "BS"}, 10, 0},
-	CTRL_ROW,
-};
-
-static const Row shift_rows[] = {
-	FUNC_ROW,
-	{{"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"}, 10, 0},
-	{{"A", "S", "D", "F", "G", "H", "J", "K", "L"}, 9, 1},
-	{{"Shift", "Z", "X", "C", "V", "B", "N", "M", "_", "BS"}, 10, 0},
-	CTRL_ROW,
-};
-
-static const Row symbol_rows[] = {
-	FUNC_ROW,
-	{{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}, 10, 0},
-	{{"", "", "`", "=", "\\", ";", "'", "[", "]"}, 9, 1},
-	{{"Shift", "", "", "", "", "", ",", ".", "/", "BS"}, 10, 0},
-	CTRL_ROW,
-};
-
-static const Row symshift_rows[] = {
-	FUNC_ROW,
-	{{"!", "@", "#", "$", "%", "^", "&", "*", "(", ")"}, 10, 0},
-	{{"", "", "~", "+", "|", ":", "\"", "{", "}"}, 9, 1},
-	{{"Shift", "", "", "", "", "", "<", ">", "?", "BS"}, 10, 0},
-	CTRL_ROW,
-};
-
-enum layout_id { L_NONE = -1, L_NORMAL, L_SHIFT, L_SYMBOL, L_SYMSHIFT };
-
-/* Exported so that keyoverlay.h's inline geometry helpers can reference them. */
-const Layout layouts[] = {
-	[L_NORMAL]  = {"Normal",         normal_rows,   5},
-	[L_SHIFT]   = {"Shift",          shift_rows,    5},
-	[L_SYMBOL]  = {"Symbol",         symbol_rows,   5},
-	[L_SYMSHIFT]= {"Symbol + Shift", symshift_rows, 5},
-};
-const int N_LAYOUTS = (int)(sizeof(layouts) / sizeof(layouts[0]));
-
-/* ------------------------------------------------------------------ */
 /* Input device helpers                                               */
 /* ------------------------------------------------------------------ */
 
-static int dev_name_matches(const char *path, const char *want)
+static int input_device_name(const char *path, char *name, size_t size)
 {
-	char name[256] = {0};
 	int fd = open(path, O_RDONLY);
 	if (fd < 0)
-		return 0;
-	int ok = 0;
-	if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0)
-		ok = (strstr(name, want) != NULL);
+		return -1;
+	memset(name, 0, size);
+	int result = ioctl(fd, EVIOCGNAME(size - 1), name);
 	close(fd);
-	return ok;
+	return result;
 }
 
 static int find_input_device(const char *want, char *out, size_t outlen)
 {
 	for (int i = 0; i < 32; i++) {
-		char path[64];
+		char path[64], name[256];
 		snprintf(path, sizeof(path), "/dev/input/event%d", i);
-		if (dev_name_matches(path, want)) {
+		if (input_device_name(path, name, sizeof(name)) >= 0 && strstr(name, want)) {
 			snprintf(out, outlen, "%s", path);
 			return 0;
 		}
@@ -125,14 +70,10 @@ static int find_input_device(const char *want, char *out, size_t outlen)
 static void list_input_devices(void)
 {
 	for (int i = 0; i < 32; i++) {
-		char path[64], name[256] = {0};
+		char path[64], name[256];
 		snprintf(path, sizeof(path), "/dev/input/event%d", i);
-		int fd = open(path, O_RDONLY);
-		if (fd < 0)
-			continue;
-		if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0)
+		if (input_device_name(path, name, sizeof(name)) >= 0)
 			printf("%s: %s\n", path, name);
-		close(fd);
 	}
 }
 
@@ -154,6 +95,32 @@ static int read_symbol_state(int fd, bool *symbol)
 	}
 	*symbol = state[0] == '1';
 	return 0;
+}
+
+static int open_symbol_state(int input_fd, const char *path, bool *symbol, int verbose)
+{
+	char sysfs_path[128];
+	if (!path) {
+		struct stat input_stat;
+		if (fstat(input_fd, &input_stat) < 0) {
+			perror("keyoverlay: stat input device");
+			return -1;
+		}
+		snprintf(sysfs_path, sizeof(sysfs_path),
+			 "/sys/dev/char/%u:%u/device/symbol_activated",
+			 major(input_stat.st_rdev), minor(input_stat.st_rdev));
+		path = sysfs_path;
+	}
+	int fd = open(path, O_RDONLY);
+	if (fd < 0 || read_symbol_state(fd, symbol) < 0) {
+		fprintf(stderr, "keyoverlay: read %s: %s\n", path, strerror(errno));
+		if (fd >= 0)
+			close(fd);
+		return -1;
+	}
+	if (verbose)
+		fprintf(stderr, "keyoverlay: Symbol state from %s\n", path);
+	return fd;
 }
 
 static void on_signal(int sig)
@@ -186,7 +153,6 @@ int main(int argc, char **argv)
 	int         normal_code = 0;        /* KEY_RESERVED = disabled */
 	int         verbose     = 0;
 	char        devbuf[64];
-	char        symbol_buf[4096];
 	int         opt;
 
 	while ((opt = getopt(argc, argv, "d:m:f:s:n:lvh")) != -1) {
@@ -214,6 +180,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	int result = 1;
+	int sfd = -1;
+	render_backend *backend = NULL;
 	int ifd = open(dev, O_RDONLY);
 	if (ifd < 0) {
 		fprintf(stderr, "keyoverlay: open %s: %s\n", dev, strerror(errno));
@@ -222,43 +191,12 @@ int main(int argc, char **argv)
 	if (verbose)
 		fprintf(stderr, "keyoverlay: listening on %s\n", dev);
 
-	if (!symbol_path) {
-		struct stat input_stat;
-		char input_sysfs[128], input_real[4096];
-		if (fstat(ifd, &input_stat) < 0) {
-			perror("keyoverlay: stat input device");
-			close(ifd);
-			return 1;
-		}
-		snprintf(input_sysfs, sizeof(input_sysfs), "/sys/dev/char/%u:%u/device",
-			 major(input_stat.st_rdev), minor(input_stat.st_rdev));
-		if (!realpath(input_sysfs, input_real)) {
-			perror("keyoverlay: resolve input sysfs device");
-			close(ifd);
-			return 1;
-		}
-		if (snprintf(symbol_buf, sizeof(symbol_buf), "%s/symbol_activated",
-			     input_real) >= (int)sizeof(symbol_buf)) {
-			fprintf(stderr, "keyoverlay: Symbol sysfs path too long\n");
-			close(ifd);
-			return 1;
-		}
-		symbol_path = symbol_buf;
-	}
-	int sfd = open(symbol_path, O_RDONLY);
 	bool shift = false, symbol = false, normal = false;
-	if (sfd < 0 || read_symbol_state(sfd, &symbol) < 0) {
-		fprintf(stderr, "keyoverlay: read %s: %s\n", symbol_path, strerror(errno));
-		if (sfd >= 0)
-			close(sfd);
-		close(ifd);
-		return 1;
-	}
-	if (verbose)
-		fprintf(stderr, "keyoverlay: Symbol state from %s\n", symbol_path);
+	sfd = open_symbol_state(ifd, symbol_path, &symbol, verbose);
+	if (sfd < 0)
+		goto cleanup;
 
 	/* Select render backend: prefer X11 when DISPLAY is available. */
-	render_backend *backend = NULL;
 
 #ifdef WITH_X11
 	const char *display = getenv("DISPLAY");
@@ -276,11 +214,8 @@ int main(int argc, char **argv)
 	if (!backend)
 		backend = render_fb_create(fbpath, verbose);
 
-	if (!backend) {
-		close(sfd);
-		close(ifd);
-		return 1;
-	}
+	if (!backend)
+		goto cleanup;
 
 	struct sigaction sa = {0};
 	sa.sa_handler = on_signal;
@@ -292,7 +227,7 @@ int main(int argc, char **argv)
 		{ .fd = ifd, .events = POLLIN },
 		{ .fd = sfd, .events = POLLPRI },
 	};
-	int result = 0;
+	result = 0;
 
 	while (!g_stop) {
 		enum layout_id want;
@@ -360,8 +295,11 @@ int main(int argc, char **argv)
 	if (shown != L_NONE)
 		backend->hide(backend);
 
-	backend->close(backend);
-	close(sfd);
+cleanup:
+	if (backend)
+		backend->close(backend);
+	if (sfd >= 0)
+		close(sfd);
 	close(ifd);
 	return result;
 }

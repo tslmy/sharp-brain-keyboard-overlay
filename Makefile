@@ -5,7 +5,7 @@ PREFIX  ?= /usr
 BINDIR  ?= $(PREFIX)/bin
 
 BIN  := keyoverlay
-SRCS := src/keyoverlay.c src/render_fb.c
+SRCS := src/keyoverlay.c src/render.c src/render_fb.c
 
 # X11 backend — opt out with:  make WITHOUT_X11=1
 WITHOUT_X11 ?= 0
@@ -29,9 +29,20 @@ clean:
 	rm -f $(BIN)
 
 test:
-	$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -o /tmp/keyoverlay-test tests/input.c
-	/tmp/keyoverlay-test
-	rm -f /tmp/keyoverlay-test
+	@set -eu; \
+	test_bin=$$(mktemp /tmp/keyoverlay-test.XXXXXX); \
+	trap 'rm -f "$$test_bin"' EXIT; \
+	for source in tests/input.c tests/render.c; do \
+		$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -o "$$test_bin" "$$source" src/render.c; \
+		"$$test_bin"; \
+	done
+
+test-x11:
+	@set -eu; \
+	test_bin=$$(mktemp /tmp/keyoverlay-x11-test.XXXXXX); \
+	trap 'rm -f "$$test_bin"' EXIT; \
+	$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -DWITH_X11 -o "$$test_bin" tests/render.c src/render.c -lX11; \
+	xvfb-run -a -s '-screen 0 800x480x24' "$$test_bin"
 
 # ------------ Debian package (armhf cross-build via Docker) ----------
 # Produces dist/keyoverlay_armhf.deb for distribution via an apt repository.
@@ -53,4 +64,4 @@ deb: deb-image
 		-v "$$PWD/dist":/out \
 		$(DEB_IMAGE)
 
-.PHONY: all install clean test deb-image deb
+.PHONY: all install clean test test-x11 deb-image deb
