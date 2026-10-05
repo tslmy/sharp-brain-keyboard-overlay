@@ -22,21 +22,5 @@ jobs:
         run: |
           docker run --rm --platform linux/amd64 \
             -v "$PWD/dist":/out:ro \
-            --entrypoint sh keyoverlay-deb-builder:local -ec '
-              package=/out/keyoverlay_armel.deb
-              test "$(dpkg-deb --field "$package" Architecture)" = armel
-              root=$(mktemp -d)
-              trap '\''rm -rf "$root"'\'' EXIT
-              dpkg-deb --extract "$package" "$root"
-              binary="$root/usr/bin/keyoverlay"
-              test -x "$binary"
-              readelf --file-header "$binary" | tee /tmp/elf-header
-              grep -Eq "Machine:.*ARM$" /tmp/elf-header
-              grep -q "Version5 EABI, soft-float ABI" /tmp/elf-header
-              readelf --arch-specific "$binary" | tee /tmp/elf-attributes
-              grep -Eq "Tag_CPU_arch: v5TE(J)?$" /tmp/elf-attributes
-              if grep -q "Tag_ABI_VFP_args: VFP registers" /tmp/elf-attributes; then
-                exit 1
-              fi
-              readelf --program-headers "$binary" | grep -F "/lib/ld-linux.so.3"
-            '
+            --entrypoint sh keyoverlay-deb-builder:local \
+            tests/package.sh /out/keyoverlay_armel.deb

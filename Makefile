@@ -54,9 +54,10 @@ test-x11:
 #     os-brainux/override dir so it gets injected into the rootfs image)
 
 DEB_IMAGE := keyoverlay-deb-builder:local
+DEB_VERSION ?=
 
 deb-image:
-	docker build --platform linux/amd64 -t $(DEB_IMAGE) -f Dockerfile.deb .
+	docker build --platform linux/amd64 --build-arg DEB_VERSION="$(DEB_VERSION)" -t $(DEB_IMAGE) -f Dockerfile.deb .
 
 deb: deb-image
 	mkdir -p dist

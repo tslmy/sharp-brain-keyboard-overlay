@@ -30,6 +30,7 @@ COPY . .
 RUN make CC=arm-linux-gnueabi-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
 
 # Assemble the .deb package tree under /pkg.
+ARG DEB_VERSION
 RUN set -e; \
     mkdir -p /pkg/DEBIAN \
              /pkg/usr/bin \
@@ -40,7 +41,10 @@ RUN set -e; \
     install -m 0644 init/keyoverlay.default /pkg/etc/default/keyoverlay; \
     install -m 0644 debian/control          /pkg/DEBIAN/control; \
     install -m 0644 debian/conffiles        /pkg/DEBIAN/conffiles; \
-    install -m 0755 debian/postinst         /pkg/DEBIAN/postinst
+    install -m 0755 debian/postinst         /pkg/DEBIAN/postinst; \
+    if [ -n "${DEB_VERSION}" ]; then \
+    sed -i "s/^Version:.*/Version: ${DEB_VERSION}/" /pkg/DEBIAN/control; \
+    fi
 
 RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_armel.deb
 

@@ -69,6 +69,44 @@ Requires Docker with `linux/amd64` emulation (Docker Desktop on macOS is
 fine). The resulting package installs `/usr/bin/keyoverlay`, the systemd
 service unit, and `/etc/default/keyoverlay`.
 
+## Releasing
+
+Merge the release changes and the release workflow into `main`, then wait for
+its CI checks to pass. Choose a new stable version tag (`vMAJOR.MINOR.PATCH`);
+do not reuse or move an existing release tag. For example:
+
+```sh
+git fetch origin main
+git tag -a v1.0.1 origin/main -m "Release v1.0.1"
+git push origin refs/tags/v1.0.1
+```
+
+Pushing the tag starts the **Release** workflow. It runs the host tests,
+builds the Debian package with `make deb DEB_VERSION=1.0.1`, and verifies the
+package version and ARMv5 EABI soft-float (`armel`) binary. Ordinary `make deb`
+continues to use the version from `debian/control`.
+
+After all checks pass, the workflow creates a **draft** GitHub Release with
+generated release notes, `keyoverlay_1.0.1_armel.deb`, and `SHA256SUMS`. Check
+the Actions run, open the draft on GitHub's Releases page, review the notes
+and assets, then publish it manually. The workflow does not publish the draft
+automatically. If the build fails, fix the problem on `main` and use a new tag.
+
+Alternatively, use GitHub's **Create a new release** page with a new stable
+version tag targeting `main`, then publish it. Publishing a release also starts
+the workflow, including for an existing tag. The workflow builds that tag and
+uploads the package and checksum to the existing release without changing its
+notes or draft/published status. Saving a draft in the web UI alone does not
+trigger the release-published event. A web-published release is visible before
+its build finishes, so check that the workflow succeeds and both assets appear.
+
+Rerunning the workflow replaces same-name package and checksum assets rather
+than creating another release. Both trigger paths are serialized per tag.
+
+Buildroot continues to consume pinned source archives and compile with its own
+toolchain; these Debian assets do not change that packaging model. The release
+workflow does not build or flash an SD image.
+
 ## Usage
 
 ```

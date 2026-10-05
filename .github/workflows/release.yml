@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Validate release version
+        id: version
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a stable version tag such as v1.0.1" >&2
+            exit 1
+          fi
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Host tests
+        run: make test
+      - name: Build versioned armel package
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+        run: make deb DEB_VERSION="$DEB_VERSION"
+      - name: Verify packaged ARM binary and version
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD/dist":/out:ro \
+            --entrypoint sh keyoverlay-deb-builder:local \
+            tests/package.sh /out/keyoverlay_armel.deb "$DEB_VERSION"
+      - name: Prepare release assets
+        working-directory: dist
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mv keyoverlay_armel.deb "keyoverlay_${DEB_VERSION}_armel.deb"
+          sha256sum "keyoverlay_${DEB_VERSION}_armel.deb" > SHA256SUMS
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEB_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --verify-tag --draft --title "$RELEASE_TAG" --generate-notes \
+              || gh release view "$RELEASE_TAG" > /dev/null
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "dist/keyoverlay_${DEB_VERSION}_armel.deb" dist/SHA256SUMS --clobber
