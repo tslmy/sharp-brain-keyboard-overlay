@@ -57,17 +57,27 @@ The required headers are the Linux UAPI headers (`linux/fb.h`,
 make CC=arm-linux-gnueabi-gcc WITHOUT_X11=1
 ```
 
-### Debian package (armel, via Docker)
-
-Produces `dist/keyoverlay_armel.deb` for distribution via an apt repository:
+### Cross-build for armhf (newer Brainux models)
 
 ```sh
-make deb
+make CC=arm-linux-gnueabihf-gcc WITHOUT_X11=1
+```
+
+### Debian packages (armel and armhf, via Docker)
+
+Produces packages for distribution via an apt repository:
+
+```sh
+make deb                # dist/keyoverlay_armel.deb (default)
+make deb DEB_ARCH=armhf  # dist/keyoverlay_armhf.deb
 ```
 
 Requires Docker with `linux/amd64` emulation (Docker Desktop on macOS is
 fine). The resulting package installs `/usr/bin/keyoverlay`, the systemd
 service unit, and `/etc/default/keyoverlay`.
+Use `armel` for older chips such as i.MX28 (ARMv5, soft-float) and `armhf`
+for newer models with an ARMv7 hard-float rootfs. The packages are separate
+ABI builds, not interchangeable binaries.
 
 ## Releasing
 
@@ -77,17 +87,19 @@ do not reuse or move an existing release tag. For example:
 
 ```sh
 git fetch origin main
-git tag -a v1.0.1 origin/main -m "Release v1.0.1"
-git push origin refs/tags/v1.0.1
+git tag -a v1.0.2 origin/main -m "Release v1.0.2"
+git push origin refs/tags/v1.0.2
 ```
 
 Pushing the tag starts the **Release** workflow. It runs the host tests,
-builds the Debian package with `make deb DEB_VERSION=1.0.1`, and verifies the
-package version and ARMv5 EABI soft-float (`armel`) binary. Ordinary `make deb`
+builds both Debian packages with `make deb DEB_ARCH=armel DEB_VERSION=1.0.2`
+and `make deb DEB_ARCH=armhf DEB_VERSION=1.0.2`, and verifies each package's
+version, architecture, ELF ABI, CPU baseline, and dynamic loader. Ordinary `make deb`
 continues to use the version from `debian/control`.
 
 After all checks pass, the workflow creates a **draft** GitHub Release with
-generated release notes, `keyoverlay_1.0.1_armel.deb`, and `SHA256SUMS`. Check
+generated release notes, `keyoverlay_1.0.2_armel.deb`,
+`keyoverlay_1.0.2_armhf.deb`, and `SHA256SUMS` covering both packages. Check
 the Actions run, open the draft on GitHub's Releases page, review the notes
 and assets, then publish it manually. The workflow does not publish the draft
 automatically. If the build fails, fix the problem on `main` and use a new tag.
@@ -95,10 +107,10 @@ automatically. If the build fails, fix the problem on `main` and use a new tag.
 Alternatively, use GitHub's **Create a new release** page with a new stable
 version tag targeting `main`, then publish it. Publishing a release also starts
 the workflow, including for an existing tag. The workflow builds that tag and
-uploads the package and checksum to the existing release without changing its
+uploads both packages and the checksum file to the existing release without changing its
 notes or draft/published status. Saving a draft in the web UI alone does not
 trigger the release-published event. A web-published release is visible before
-its build finishes, so check that the workflow succeeds and both assets appear.
+its build finishes, so check that the workflow succeeds and all three assets appear.
 
 Rerunning the workflow replaces same-name package and checksum assets rather
 than creating another release. Both trigger paths are serialized per tag.

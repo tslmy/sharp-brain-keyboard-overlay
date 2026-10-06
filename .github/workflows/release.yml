@@ -34,25 +34,27 @@ jobs:
           echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
       - name: Host tests
         run: make test
-      - name: Build versioned armel package
-        env:
-          DEB_VERSION: ${{ steps.version.outputs.version }}
-        run: make deb DEB_VERSION="$DEB_VERSION"
-      - name: Verify packaged ARM binary and version
+      - name: Build and verify versioned ARM packages
         env:
           DEB_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          docker run --rm --platform linux/amd64 \
-            -v "$PWD/dist":/out:ro \
-            --entrypoint sh keyoverlay-deb-builder:local \
-            tests/package.sh /out/keyoverlay_armel.deb "$DEB_VERSION"
+          for arch in armel armhf; do
+            make deb DEB_ARCH="$arch" DEB_VERSION="$DEB_VERSION"
+            docker run --rm --platform linux/amd64 \
+              -v "$PWD/dist":/out:ro \
+              --entrypoint sh keyoverlay-deb-builder:local \
+              tests/package.sh "/out/keyoverlay_${arch}.deb" "$DEB_VERSION" "$arch"
+          done
       - name: Prepare release assets
         working-directory: dist
         env:
           DEB_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          mv keyoverlay_armel.deb "keyoverlay_${DEB_VERSION}_armel.deb"
-          sha256sum "keyoverlay_${DEB_VERSION}_armel.deb" > SHA256SUMS
+          for arch in armel armhf; do
+            mv "keyoverlay_${arch}.deb" "keyoverlay_${DEB_VERSION}_${arch}.deb"
+          done
+          sha256sum "keyoverlay_${DEB_VERSION}_armel.deb" \
+            "keyoverlay_${DEB_VERSION}_armhf.deb" > SHA256SUMS
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,4 +66,5 @@ jobs:
               || gh release view "$RELEASE_TAG" > /dev/null
           fi
           gh release upload "$RELEASE_TAG" \
-            "dist/keyoverlay_${DEB_VERSION}_armel.deb" dist/SHA256SUMS --clobber
+            "dist/keyoverlay_${DEB_VERSION}_armel.deb" \
+            "dist/keyoverlay_${DEB_VERSION}_armhf.deb" dist/SHA256SUMS --clobber

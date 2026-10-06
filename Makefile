@@ -44,8 +44,8 @@ test-x11:
 	$(CC) $(filter-out -DWITH_X11,$(CFLAGS)) -DWITH_X11 -o "$$test_bin" tests/render.c src/render.c -lX11; \
 	xvfb-run -a -s '-screen 0 800x480x24' "$$test_bin"
 
-# ------------ Debian package (armel cross-build via Docker) ----------
-# Produces dist/keyoverlay_armel.deb for distribution via an apt repository.
+# ------------ Debian package (ARM cross-build via Docker) ----------
+# Produces dist/keyoverlay_$(DEB_ARCH).deb for an apt repository.
 # Requires Docker with linux/amd64 emulation (Docker Desktop on macOS is fine).
 #
 # Intended consumers:
@@ -55,9 +55,10 @@ test-x11:
 
 DEB_IMAGE := keyoverlay-deb-builder:local
 DEB_VERSION ?=
+DEB_ARCH ?= armel
 
 deb-image:
-	docker build --platform linux/amd64 --build-arg DEB_VERSION="$(DEB_VERSION)" -t $(DEB_IMAGE) -f Dockerfile.deb .
+	docker build --platform linux/amd64 --build-arg DEB_ARCH="$(DEB_ARCH)" --build-arg DEB_VERSION="$(DEB_VERSION)" -t $(DEB_IMAGE) -f Dockerfile.deb .
 
 deb: deb-image
 	mkdir -p dist

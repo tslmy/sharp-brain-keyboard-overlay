@@ -12,15 +12,18 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [armel, armhf]
     steps:
       - uses: actions/checkout@v5
       - name: Host tests
         run: make test
-      - name: Build armel Debian package
-        run: make deb
+      - name: Build ${{ matrix.arch }} Debian package
+        run: make deb DEB_ARCH="${{ matrix.arch }}"
       - name: Verify packaged ARM binary
         run: |
           docker run --rm --platform linux/amd64 \
             -v "$PWD/dist":/out:ro \
             --entrypoint sh keyoverlay-deb-builder:local \
-            tests/package.sh /out/keyoverlay_armel.deb
+            tests/package.sh "/out/keyoverlay_${{ matrix.arch }}.deb" "" "${{ matrix.arch }}"

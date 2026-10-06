@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Dockerfile.deb — cross-compiles keyoverlay for armel and produces a .deb.
+# Dockerfile.deb — cross-compiles keyoverlay for armel or armhf.
 #
 # Usage (via Makefile):
 #   make deb          # build image + run container, outputs dist/keyoverlay_armel.deb
@@ -12,14 +12,14 @@ ARG BUILDER_PLATFORM=linux/amd64
 FROM --platform=${BUILDER_PLATFORM} debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
+ARG DEB_ARCH=armel
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         binutils \
         build-essential \
         dpkg-dev \
-        gcc-arm-linux-gnueabi \
-        libc6-dev-armel-cross \
+        crossbuild-essential-${DEB_ARCH} \
         make \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +27,14 @@ WORKDIR /src
 COPY . .
 
 # Cross-compile (framebuffer backend only; no X11 on bare Debian console).
-RUN make CC=arm-linux-gnueabi-gcc WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
+RUN set -eu; \
+    case "$DEB_ARCH" in \
+        armel) compiler=arm-linux-gnueabi-gcc ;; \
+        armhf) compiler=arm-linux-gnueabihf-gcc ;; \
+        *) echo "Unsupported architecture: $DEB_ARCH" >&2; exit 1 ;; \
+    esac; \
+    make clean; \
+    make CC="$compiler" WITHOUT_X11=1 CFLAGS="-O2 -Wall -Wextra"
 
 # Assemble the .deb package tree under /pkg.
 ARG DEB_VERSION
@@ -42,11 +49,13 @@ RUN set -e; \
     install -m 0644 debian/control          /pkg/DEBIAN/control; \
     install -m 0644 debian/conffiles        /pkg/DEBIAN/conffiles; \
     install -m 0755 debian/postinst         /pkg/DEBIAN/postinst; \
+    sed -i "s/^Architecture:.*/Architecture: ${DEB_ARCH}/" /pkg/DEBIAN/control; \
     if [ -n "${DEB_VERSION}" ]; then \
     sed -i "s/^Version:.*/Version: ${DEB_VERSION}/" /pkg/DEBIAN/control; \
     fi
 
-RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_armel.deb
+RUN dpkg-deb --build --root-owner-group /pkg /keyoverlay_${DEB_ARCH}.deb
 
 # Default command: copy the deb to the /out mount point.
-CMD ["cp", "/keyoverlay_armel.deb", "/out/"]
+ENV DEB_ARCH=${DEB_ARCH}
+CMD ["sh", "-c", "cp /keyoverlay_${DEB_ARCH}.deb /out/"]
